@@ -3,8 +3,8 @@ const CONFIG = {
         lat: -7.783446028514716,
         lng: 110.40502826594829
     },
-    MAX_DISTANCE: 50, // meters
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyOZoOVgrIj4_bDDCVksCxnph0yrEAM_vGWHbTh4uiuVvxdzVcaRTE4O9hqs-BJ4_XyAA/exec' // Ganti dengan URL Apps Script
+    MAX_DISTANCE: 100, // meters
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzpGRVpfHhIDngM4SoZzx2RpF1oS8m1D8VkM_gFXallDGw3r0aemxykxPfEZHdr77R2Kw/exec'
 };
 
 const BARISTA_DATA = {
@@ -18,6 +18,11 @@ const BARISTA_DATA = {
 // Global state
 let currentLocation = null;
 let isInRange = false;
+let durationInterval = null;
+let todayAttendance = {
+    checkIn: null,
+    checkOut: null
+};
 
 // DOM Elements
 const elements = {
@@ -28,7 +33,13 @@ const elements = {
     checkInBtn: document.getElementById('checkInBtn'),
     checkOutBtn: document.getElementById('checkOutBtn'),
     message: document.getElementById('message'),
-    todayHistory: document.getElementById('todayHistory')
+    todayHistory: document.getElementById('todayHistory'),
+    durationCard: document.getElementById('durationCard'),
+    durationTime: document.getElementById('durationTime'),
+    checkInTime: document.getElementById('checkInTime'),
+    checkOutTime: document.getElementById('checkOutTime'),
+    checkOutStatus: document.getElementById('checkOutStatus'),
+    circleProgress: document.getElementById('circleProgress')
 };
 
 // Initialize
@@ -44,6 +55,9 @@ function init() {
     elements.checkInBtn.addEventListener('click', () => handleAttendance('in'));
     elements.checkOutBtn.addEventListener('click', () => handleAttendance('out'));
     elements.pin.addEventListener('input', handlePinInput);
+    
+    // Refresh history every 30 seconds
+    setInterval(loadTodayHistory, 30000);
 }
 
 // Update date and time
@@ -200,14 +214,16 @@ async function handleAttendance(type) {
 
         // Success
         const typeText = type === 'in' ? 'Check In' : 'Check Out';
-        showMessage('success', `${typeText} berhasil! Selamat bekerja, ${BARISTA_DATA[baristaId].name}`);
+        showMessage('success', `${typeText} berhasil! ${type === 'in' ? 'Selamat bekerja' : 'Terima kasih'}, ${BARISTA_DATA[baristaId].name}`);
 
         // Reset form
         elements.baristaName.value = '';
         elements.pin.value = '';
 
-        // Refresh history
-        loadTodayHistory();
+        // Refresh history after a short delay
+        setTimeout(() => {
+            loadTodayHistory();
+        }, 2000);
 
     } catch (error) {
         showMessage('error', 'Gagal menyimpan presensi: ' + error.message);
@@ -220,13 +236,6 @@ async function handleAttendance(type) {
 
 // Send data to Google Sheets
 async function sendToGoogleSheets(data) {
-    // Check if URL is configured
-    if (CONFIG.GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
-        console.log('Data yang akan dikirim:', data);
-        // Simulate success for testing
-        return new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
     const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -242,23 +251,39 @@ async function sendToGoogleSheets(data) {
 }
 
 // Load today's attendance history
-function loadTodayHistory() {
-    // This is a placeholder - in production, fetch from Google Sheets
-    const today = new Date().toLocaleDateString('id-ID');
+async function loadTodayHistory() {
+    console.log('Loading history...');
     
-    // Example data (replace with actual fetch from Google Sheets)
-    const historyData = [
-        // { name: 'Ahmad Rizki', type: 'in', time: '08:00:15' },
-        // { name: 'Siti Nurhaliza', type: 'in', time: '08:05:30' },
-    ];
+    try {
+        // IMPORTANT: Remove mode: 'no-cors' for GET requests
+        const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=getHistory`);
+        
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        
+        const result = await response.json();
+        console.log('History data:', result);
 
-    if (historyData.length === 0) {
-        elements.todayHistory.innerHTML = '<p class="no-data">Belum ada presensi hari ini</p>';
-        return;
+        if (result.success && result.data && result.data.length > 0) {
+            displayHistory(result.data);
+        } else {
+            elements.todayHistory.innerHTML = '<p class="no-data">Belum ada presensi hari ini</p>';
+        }
+    } catch (error) {
+        console.error('Error loading history:', error);
+        elements.todayHistory.innerHTML = '<p class="no-data">Gagal memuat riwayat. Cek console untuk detail.</p>';
     }
+}
 
+// Display history
+function displayHistory(data) {
+    console.log('Displaying history:', data);
+    
     let html = '';
-    historyData.forEach(item => {
+    data.forEach(item => {
         const typeClass = item.type === 'in' ? 'check-in' : 'check-out';
         const badgeClass = item.type === 'in' ? 'in' : 'out';
         const badgeText = item.type === 'in' ? 'Masuk' : 'Keluar';
@@ -267,7 +292,7 @@ function loadTodayHistory() {
             <div class="history-item ${typeClass}">
                 <div class="history-info">
                     <div class="history-name">${item.name}</div>
-                    <div class="history-time">${item.time}</div>
+                    <div class="history-time">${item.waktu}</div>
                 </div>
                 <span class="history-badge ${badgeClass}">${badgeText}</span>
             </div>

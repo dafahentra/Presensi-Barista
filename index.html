@@ -20,8 +20,35 @@
         <div class="container">
             <!-- Status Lokasi -->
             <div class="location-status" id="locationStatus">
-                <span class="status-icon">&bull;</span>
+                <span class="status-icon">●</span>
                 <span class="status-text">Memeriksa lokasi...</span>
+            </div>
+
+            <!-- Work Duration Card -->
+            <div class="duration-card" id="durationCard" style="display: none;">
+                <div class="duration-circle">
+                    <svg width="200" height="200" viewBox="0 0 200 200">
+                        <circle class="circle-bg" cx="100" cy="100" r="90"></circle>
+                        <circle class="circle-progress" id="circleProgress" cx="100" cy="100" r="90" 
+                                stroke-dasharray="565.48" stroke-dashoffset="565.48"></circle>
+                    </svg>
+                    <div class="duration-text">
+                        <div class="duration-label">working hours</div>
+                        <div class="duration-time" id="durationTime">00:00</div>
+                    </div>
+                </div>
+                <div class="time-info">
+                    <div class="time-item">
+                        <div class="time-label">Check-In</div>
+                        <div class="time-value" id="checkInTime">--:--</div>
+                        <div class="time-status">Online</div>
+                    </div>
+                    <div class="time-item">
+                        <div class="time-label">Check-Out</div>
+                        <div class="time-value" id="checkOutTime">--:--</div>
+                        <div class="time-status" id="checkOutStatus">--</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Card Presensi -->
@@ -55,12 +82,8 @@
                 </div>
 
                 <div class="button-group">
-                    <button id="checkInBtn" class="btn btn-primary">
-                        Check In
-                    </button>
-                    <button id="checkOutBtn" class="btn btn-secondary">
-                        Check Out
-                    </button>
+                    <button id="checkInBtn" class="btn btn-primary">Check In</button>
+                    <button id="checkOutBtn" class="btn btn-secondary">Check Out</button>
                 </div>
 
                 <div id="message" class="message"></div>
@@ -69,7 +92,7 @@
             <div class="card">
                 <h3 class="card-subtitle">Riwayat Hari Ini</h3>
                 <div id="todayHistory" class="history-list">
-                    <p class="no-data">Belum ada presensi hari ini</p>
+                    <p class="no-data">Memuat data...</p>
                 </div>
             </div>
         </div>

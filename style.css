@@ -68,11 +68,15 @@ body {
 }
 
 .location-status.in-range {
-    border-left: 4px solid #333;
+    border-left: 4px solid #4CAF50;
 }
 
 .location-status.out-range {
-    border-left: 4px solid #666;
+    border-left: 4px solid #f44336;
+}
+
+.location-status.error {
+    border-left: 4px solid #ff9800;
 }
 
 .status-icon {
@@ -84,6 +88,91 @@ body {
     font-size: 14px;
     color: #333;
     font-weight: 500;
+}
+
+/* Work Duration Card */
+.duration-card {
+    background: white;
+    border-radius: 8px;
+    padding: 30px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.duration-circle {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 20px;
+}
+
+.circle-bg {
+    fill: none;
+    stroke: #e0e0e0;
+    stroke-width: 8;
+}
+
+.circle-progress {
+    fill: none;
+    stroke: #333;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    transition: stroke-dashoffset 0.5s ease;
+}
+
+.duration-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.duration-label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.duration-time {
+    font-size: 36px;
+    font-weight: bold;
+    color: #333;
+    font-family: monospace;
+}
+
+.time-info {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.time-item {
+    text-align: center;
+}
+
+.time-label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.time-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    font-family: monospace;
+}
+
+.time-status {
+    font-size: 11px;
+    color: #999;
+    margin-top: 2px;
 }
 
 /* Card */
@@ -231,15 +320,9 @@ body {
     border: 1px solid #ddd;
 }
 
-.message.info {
-    background: #fafafa;
-    color: #555;
-    border: 1px solid #e0e0e0;
-}
-
 /* History List */
 .history-list {
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
 }
 
@@ -255,11 +338,11 @@ body {
 }
 
 .history-item.check-in {
-    border-left-color: #333;
+    border-left-color: #4CAF50;
 }
 
 .history-item.check-out {
-    border-left-color: #666;
+    border-left-color: #f44336;
 }
 
 .history-info {
@@ -286,12 +369,12 @@ body {
 }
 
 .history-badge.in {
-    background: #333;
+    background: #4CAF50;
     color: white;
 }
 
 .history-badge.out {
-    background: #666;
+    background: #f44336;
     color: white;
 }
 
@@ -331,7 +414,7 @@ body {
         padding: 0 15px;
     }
     
-    .card {
+    .card, .duration-card {
         padding: 20px;
     }
     
@@ -346,15 +429,33 @@ body {
     .btn {
         padding: 16px 20px;
     }
+
+    .duration-circle {
+        width: 180px;
+        height: 180px;
+    }
+
+    .duration-time {
+        font-size: 32px;
+    }
 }
 
 @media (max-width: 400px) {
-    .card {
+    .card, .duration-card {
         padding: 15px;
     }
     
     .logo {
         font-size: 20px;
         letter-spacing: 1px;
+    }
+
+    .duration-circle {
+        width: 160px;
+        height: 160px;
+    }
+
+    .duration-time {
+        font-size: 28px;
     }
 }
