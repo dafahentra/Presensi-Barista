@@ -3,7 +3,7 @@ const CONFIG = {
         lat: -7.783446028514716,
         lng: 110.40502826594829
     },
-    MAX_DISTANCE: 10000, // meters
+    MAX_DISTANCE: 100, // meters
     GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyn7dVAOzBDlaFDdwPCBfw5hd41CVNXAUJka3ylL23DSzs_KQMwLYFEXoso0A7pi_fW7g/exec'
 };
 
