@@ -3,106 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SECTOR SEVEN - Presensi</title>
-    <link rel="stylesheet" href="style.css">
+    <title>SECTOR SEVEN - Presensi Barista</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    
+    <!-- Custom Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#dc2626', // red-600
+                        secondary: '#16a34a', // green-600
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom styles for Leaflet markers */
+        .custom-marker {
+            background: none;
+            border: none;
+        }
+        
+        .marker-pin {
+            font-size: 32px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            animation: markerDrop 0.5s ease;
+        }
+        
+        .marker-pin.pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes markerDrop {
+            0% { transform: translateY(-50px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        /* Leaflet popup customization */
+        .leaflet-popup-content-wrapper {
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .leaflet-popup-content {
+            margin: 12px;
+            font-size: 13px;
+        }
+        
+        /* Hide Leaflet attribution on mobile */
+        @media (max-width: 640px) {
+            .leaflet-control-attribution {
+                font-size: 8px;
+            }
+        }
+    </style>
 </head>
-<body>
+<body class="bg-gray-50 min-h-screen">
+    
     <!-- Header -->
-    <header class="header">
-        <div class="container">
-            <h1 class="logo">SECTOR SEVEN</h1>
-            <div class="datetime" id="datetime"></div>
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="max-w-2xl mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <button class="p-2 hover:bg-gray-100 rounded-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <h1 class="text-xl font-bold tracking-wider">SECTOR SEVEN</h1>
+                <button class="p-2 hover:bg-gray-100 rounded-full">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="text-center text-xs text-gray-500 mt-2" id="datetime"></div>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="main">
-        <div class="container">
-            <!-- Status Lokasi -->
-            <div class="location-status" id="locationStatus">
-                <span class="status-icon">●</span>
-                <span class="status-text">Memeriksa lokasi...</span>
+    <main class="max-w-2xl mx-auto px-4 py-6 space-y-4">
+        
+        <!-- Status Presensi Card -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <h2 class="text-2xl font-bold mb-4">Presensi Barista</h2>
+            <div id="statusBadge" class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600">
+                <span class="w-2 h-2 rounded-full bg-gray-400 mr-2 animate-pulse"></span>
+                Memeriksa status...
             </div>
+        </div>
 
-            <!-- Work Duration Card -->
-            <div class="duration-card" id="durationCard" style="display: none;">
-                <div class="duration-circle">
-                    <svg width="200" height="200" viewBox="0 0 200 200">
-                        <circle class="circle-bg" cx="100" cy="100" r="90"></circle>
-                        <circle class="circle-progress" id="circleProgress" cx="100" cy="100" r="90" 
-                                stroke-dasharray="565.48" stroke-dashoffset="565.48"></circle>
-                    </svg>
-                    <div class="duration-text">
-                        <div class="duration-label">working hours</div>
-                        <div class="duration-time" id="durationTime">00:00</div>
-                    </div>
-                </div>
-                <div class="time-info">
-                    <div class="time-item">
-                        <div class="time-label">Check-In</div>
-                        <div class="time-value" id="checkInTime">--:--</div>
-                        <div class="time-status">Online</div>
-                    </div>
-                    <div class="time-item">
-                        <div class="time-label">Check-Out</div>
-                        <div class="time-value" id="checkOutTime">--:--</div>
-                        <div class="time-status" id="checkOutStatus">--</div>
-                    </div>
-                </div>
+        <!-- Informasi Pengguna Card -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <div class="flex items-center gap-2 mb-4">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <h3 class="text-lg font-semibold">Informasi Barista</h3>
             </div>
-
-            <!-- Card Presensi -->
-            <div class="card">
-                <h2 class="card-title">Presensi Barista</h2>
-                
-                <!-- Dropdown Nama -->
-                <div class="form-group">
-                    <label for="baristaName">Pilih Nama</label>
-                    <select id="baristaName" class="form-select">
-                        <option value="">-- Pilih Barista --</option>
-                        <option value="1">Dapek</option>
-                        <option value="2">Siti</option>
-                        <option value="3">Depon</option>
-                        <option value="4">Abey</option>
-                        <option value="5">Cler</option>
-                    </select>
+            
+            <div class="space-y-3">
+                <div class="flex justify-between py-2 border-b border-gray-100">
+                    <span class="text-gray-600">Nama</span>
+                    <span class="font-medium" id="selectedName">-</span>
                 </div>
-
-                <!-- PIN Input -->
-                <div class="form-group">
-                    <label for="pin">PIN (4 Digit)</label>
-                    <input 
-                        type="password" 
-                        id="pin" 
-                        class="form-input" 
-                        maxlength="4" 
-                        placeholder="****"
-                        inputmode="numeric"
-                    >
+                <div class="flex justify-between py-2 border-b border-gray-100">
+                    <span class="text-gray-600">Shift</span>
+                    <span class="font-medium" id="currentShift">-</span>
                 </div>
-
-                <div class="button-group">
-                    <button id="checkInBtn" class="btn btn-primary">Check In</button>
-                    <button id="checkOutBtn" class="btn btn-secondary">Check Out</button>
+                <div class="flex justify-between py-2 border-b border-gray-100">
+                    <span class="text-gray-600">Tanggal</span>
+                    <span class="font-medium" id="currentDate">-</span>
                 </div>
-
-                <div id="message" class="message"></div>
-            </div>
-
-            <div class="card">
-                <h3 class="card-subtitle">Riwayat Hari Ini</h3>
-                <div id="todayHistory" class="history-list">
-                    <p class="no-data">Memuat data...</p>
+                <div class="flex justify-between py-2">
+                    <span class="text-gray-600">Waktu</span>
+                    <span class="font-medium" id="currentTime">-</span>
                 </div>
             </div>
         </div>
+
+        <!-- Lokasi Saat Ini Card -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <h3 class="text-lg font-semibold">Lokasi Saat Ini</h3>
+                </div>
+                <button id="refreshLocationBtn" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Map Container -->
+            <div id="map" class="w-full h-80 rounded-xl overflow-hidden border-2 border-gray-200 mb-4"></div>
+            
+            <!-- Location Info -->
+            <div class="space-y-2 text-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600">Koordinat:</span>
+                    <span class="font-mono text-xs" id="coordinates">Loading...</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600">Status:</span>
+                    <div id="radiusStatus" class="flex items-center gap-1">
+                        <span class="text-gray-500">Checking...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Presensi Card -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <div class="flex items-center gap-2 mb-6">
+                <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <h3 class="text-lg font-semibold">Form Presensi</h3>
+            </div>
+            
+            <!-- Nama Barista -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Nama Barista</label>
+                <select id="baristaName" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all">
+                    <option value="">-- Pilih Barista --</option>
+                    <option value="1">Dapek</option>
+                    <option value="2">Siti</option>
+                    <option value="3">Depon</option>
+                    <option value="4">Abey</option>
+                    <option value="5">Cler</option>
+                </select>
+            </div>
+            
+            <!-- PIN -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">PIN (4 Digit)</label>
+                <input 
+                    type="password" 
+                    id="pin" 
+                    maxlength="4" 
+                    placeholder="••••"
+                    inputmode="numeric"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-xl text-center text-2xl tracking-widest focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                >
+            </div>
+            
+            <!-- Status Presensi -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status Presensi</label>
+                <select id="attendanceType" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all">
+                    <option value="in">Check In - Masuk</option>
+                    <option value="out">Check Out - Pulang</option>
+                </select>
+            </div>
+            
+            <!-- Submit Button -->
+            <button 
+                id="submitBtn" 
+                class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+                Submit Presensi
+            </button>
+            
+            <!-- Message -->
+            <div id="message" class="mt-4 hidden"></div>
+        </div>
+
+        <!-- Riwayat Hari Ini Card -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <h3 class="text-lg font-semibold mb-4">Riwayat Hari Ini</h3>
+            <div id="todayHistory" class="space-y-2">
+                <div class="text-center text-gray-400 py-8 text-sm">
+                    <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Memuat data...
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <!-- Footer -->
-    <footer class="footer">
+    <footer class="bg-white mt-8 py-4 text-center text-xs text-gray-500 border-t">
         <p>&copy; 2026 SECTOR SEVEN. All rights reserved.</p>
     </footer>
 
-    <script src="script.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    
+    <script src="script-tailwind.js"></script>
 </body>
 </html>
