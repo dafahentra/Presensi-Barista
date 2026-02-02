@@ -1,7 +1,7 @@
 const CONFIG = {
     CAFE_LOCATION: {
-        lat: -7.78354905965938,
-        lng: 110.40493138658327 
+        lat: -7.783331612354664,
+        lng: 110.40478602187972
     },
     MAX_DISTANCE: 100, // meters
     GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyn7dVAOzBDlaFDdwPCBfw5hd41CVNXAUJka3ylL23DSzs_KQMwLYFEXoso0A7pi_fW7g/exec',
