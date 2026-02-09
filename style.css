@@ -1,3 +1,9 @@
+/* ===================================
+   STYLE.CSS - OPTIMIZED VERSION
+   Font Family: SF Pro (System) + SF Mono
+   Total: 2 Font Families Only
+   =================================== */
+
 /* Base Styles */
 * {
     margin: 0;
@@ -6,11 +12,17 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* ✅ FONT FAMILY 1: SF Pro Display (System Font) untuk semua UI */
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
     background: #f5f5f5;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    color: #333;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Container */
@@ -31,17 +43,20 @@ body {
 
 .logo {
     font-size: 28px;
-    font-weight: bold;
+    font-weight: 700;
     color: #333;
     text-align: center;
     margin-bottom: 8px;
     letter-spacing: 2px;
+    /* ✅ Menggunakan font family yang sama dari body */
 }
 
 .datetime {
     text-align: center;
     color: #666;
     font-size: 14px;
+    font-weight: 400;
+    /* ✅ Menggunakan font family yang sama dari body */
 }
 
 /* Main Content */
@@ -49,6 +64,84 @@ body {
     flex: 1;
     padding-bottom: 30px;
 }
+
+/* Map Card */
+.map-card {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.map-title {
+    padding: 15px 20px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 1px solid #e0e0e0;
+    margin: 0;
+}
+
+.map-container {
+    width: 100%;
+}
+
+#map {
+    width: 100%;
+    height: 300px;
+    z-index: 1;
+}
+
+.location-details {
+    padding: 12px 20px;
+    background: white;
+}
+
+.coordinates-compact {
+    font-size: 13px;
+    font-weight: 400;
+    color: #666;
+    text-align: center;
+    margin-bottom: 10px;
+    /* ✅ FONT FAMILY 2: SF Mono untuk data teknis (koordinat, waktu, PIN) */
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+}
+
+.coordinates-compact span {
+    font-weight: 600;
+    color: #333;
+}
+
+.radius-status {
+    padding: 10px 15px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.radius-status.checking {
+    background: #f5f5f5;
+    color: #666;
+}
+
+.radius-status.in-range {
+    background: #d4edda;
+    color: #155724;
+}
+
+.radius-status.out-range {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.radius-status.error {
+    background: #fff3cd;
+    color: #856404;
+}
+
 
 /* Location Status */
 .location-status {
@@ -86,8 +179,8 @@ body {
 
 .status-text {
     font-size: 14px;
-    color: #333;
     font-weight: 500;
+    color: #333;
 }
 
 /* Work Duration Card */
@@ -133,15 +226,20 @@ body {
 
 .duration-label {
     font-size: 12px;
+    font-weight: 400;
     color: #666;
     margin-bottom: 5px;
+    text-transform: lowercase;
+    /* ✅ Menggunakan font family SF Pro dari body */
 }
 
 .duration-time {
     font-size: 36px;
-    font-weight: bold;
+    font-weight: 700;
     color: #333;
-    font-family: monospace;
+    /* ✅ FONT FAMILY 2: SF Mono untuk waktu/durasi */
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    line-height: 1;
 }
 
 .time-info {
@@ -158,21 +256,27 @@ body {
 
 .time-label {
     font-size: 12px;
+    font-weight: 500;
     color: #666;
     margin-bottom: 5px;
+    /* ✅ SF Pro dari body */
 }
 
 .time-value {
     font-size: 18px;
-    font-weight: bold;
+    font-weight: 700;
     color: #333;
-    font-family: monospace;
+    /* ✅ FONT FAMILY 2: SF Mono untuk nilai waktu */
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    line-height: 1;
 }
 
 .time-status {
     font-size: 11px;
+    font-weight: 400;
     color: #999;
     margin-top: 2px;
+    /* ✅ SF Pro dari body */
 }
 
 /* Card */
@@ -185,18 +289,18 @@ body {
 }
 
 .card-title {
-    font-size: 22px;
+    font-size: 20px;
+    font-weight: 600;
     color: #333;
     margin-bottom: 25px;
     text-align: center;
-    font-weight: 600;
 }
 
 .card-subtitle {
     font-size: 18px;
+    font-weight: 600;
     color: #333;
     margin-bottom: 15px;
-    font-weight: 600;
 }
 
 /* Form Elements */
@@ -219,8 +323,11 @@ body {
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 16px;
+    font-weight: 400;
     transition: all 0.3s ease;
     background: white;
+    /* ✅ Inherit dari body = SF Pro */
+    font-family: inherit;
 }
 
 .form-select:focus,
@@ -231,9 +338,13 @@ body {
 }
 
 .form-input[type="password"] {
-    letter-spacing: 8px;
-    font-size: 20px;
+    /* ✅ OPTIMIZED: Tidak perlu letter-spacing berlebihan */
+    letter-spacing: 2px;  /* Turun dari 8px */
+    font-size: 16px;      /* Turun dari 20px */
+    font-weight: 600;     /* Turun dari 700 */
     text-align: center;
+    /* ✅ FONT FAMILY 2: SF Mono untuk PIN (data sensitif) */
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
 }
 
 /* Buttons */
@@ -248,12 +359,14 @@ body {
     padding: 14px 20px;
     border: none;
     border-radius: 4px;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    /* ✅ Inherit dari body = SF Pro */
+    font-family: inherit;
 }
 
 .btn:active {
@@ -299,6 +412,7 @@ body {
     padding: 12px 15px;
     border-radius: 4px;
     font-size: 14px;
+    font-weight: 500;
     text-align: center;
     display: none;
     animation: fadeIn 0.3s ease;
@@ -350,6 +464,7 @@ body {
 }
 
 .history-name {
+    font-size: 14px;
     font-weight: 600;
     color: #333;
     margin-bottom: 4px;
@@ -357,15 +472,19 @@ body {
 
 .history-time {
     font-size: 13px;
+    font-weight: 400;
     color: #666;
+    /* ✅ FONT FAMILY 2: SF Mono untuk waktu */
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
 }
 
 .history-badge {
     padding: 4px 12px;
     border-radius: 2px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .history-badge.in {
@@ -381,6 +500,8 @@ body {
 .no-data {
     text-align: center;
     color: #999;
+    font-size: 14px;
+    font-weight: 400;
     font-style: italic;
     padding: 20px;
 }
@@ -392,6 +513,7 @@ body {
     text-align: center;
     color: #666;
     font-size: 13px;
+    font-weight: 400;
     margin-top: auto;
     box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.05);
 }
@@ -428,6 +550,7 @@ body {
     
     .btn {
         padding: 16px 20px;
+        font-size: 14px;
     }
 
     .duration-circle {
@@ -437,6 +560,23 @@ body {
 
     .duration-time {
         font-size: 32px;
+    }
+
+    #map {
+        height: 250px;
+    }
+
+    .map-title {
+        padding: 12px 15px;
+        font-size: 16px;
+    }
+
+    .location-details {
+        padding: 10px 15px;
+    }
+
+    .coordinates-compact {
+        font-size: 12px;
     }
 }
 
@@ -458,4 +598,28 @@ body {
     .duration-time {
         font-size: 28px;
     }
+
+    #map {
+        height: 200px;
+    }
 }
+
+/* ===================================
+   FONT FAMILY SUMMARY:
+   
+   1. SF Pro Display (System Font):
+      - Body text
+      - Headers
+      - Labels
+      - Buttons
+      - Messages
+      
+   2. SF Mono (Monospace):
+      - Koordinat GPS
+      - Waktu/jam (HH:MM:SS)
+      - PIN input
+      - Durasi kerja
+      - Data teknis
+      
+   Total: 2 Font Families
+   =================================== */

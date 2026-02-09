@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SECTOR SEVEN - Presensi</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,9 +19,25 @@
     <!-- Main Content -->
     <main class="main">
         <div class="container">
-            <!-- Status Lokasi -->
-            <div class="location-status" id="locationStatus">
-                <span class="status-icon">●</span>
+            <!-- Map Container -->
+            <div class="map-card">
+                <h3 class="map-title">Lokasi Saat Ini</h3>
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+                <div class="location-details">
+                    <div class="coordinates-compact">
+                        Lat: <span id="latValue">--.------</span> | Lng: <span id="lngValue">--.------</span>
+                    </div>
+                    <div class="radius-status" id="radiusStatus">
+                        <span id="radiusText">Memeriksa lokasi...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden location status for compatibility -->
+            <div class="location-status" id="locationStatus" style="display: none;">
+                <span class="status-icon">â—</span>
                 <span class="status-text">Memeriksa lokasi...</span>
             </div>
 
@@ -60,11 +77,18 @@
                     <label for="baristaName">Pilih Nama</label>
                     <select id="baristaName" class="form-select">
                         <option value="">-- Pilih Barista --</option>
-                        <option value="1">Dapek</option>
-                        <option value="2">Siti</option>
-                        <option value="3">Depon</option>
-                        <option value="4">Abey</option>
-                        <option value="5">Cler</option>
+                        <option value="1">Abida</option>
+                        <option value="2">Aca</option>
+                        <option value="3">Rilies</option>
+                        <option value="4">Rio</option>
+                        <option value="5">Taqiy</option>
+                        <option value="6">Salma</option>
+                        <option value="7">Ibriel</option>
+                        <option value="8">Abey</option>
+                        <option value="9">Claresta</option>
+                        <option value="10">Dafa</option>
+                        <option value="11">Devon</option>
+                        <option value="12">Intan</option>
                     </select>
                 </div>
 
@@ -103,6 +127,7 @@
         <p>&copy; 2026 SECTOR SEVEN. All rights reserved.</p>
     </footer>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
