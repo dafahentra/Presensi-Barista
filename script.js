@@ -1,7 +1,7 @@
 const CONFIG = {
     CAFE_LOCATION: {
-        lat: -7.783172162412872,
-        lng: 110.40523663297974
+        lat: -7.770132025075595,
+        lng: 110.3799652041438
     },
     MAX_DISTANCE: 100, // meters
     // ⚠️ GANTI URL INI DENGAN URL DEPLOYMENT BARU ANDA!
