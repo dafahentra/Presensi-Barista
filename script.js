@@ -386,7 +386,7 @@ async function handleAttendance(type) {
 
     // Check location
     if (!isInRange) {
-        showMessage('error', 'Anda berada di luar radius lokasi kerja (max 100m)');
+        showMessage('error', 'Anda berada di luar radius lokasi kerja');
         return;
     }
 
