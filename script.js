@@ -5,7 +5,7 @@ const CONFIG = {
     },
     MAX_DISTANCE: 100, // meters
     // ⚠️ GANTI URL INI DENGAN URL DEPLOYMENT BARU ANDA!
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwpRtLg3zSx2sL_rdFpN8P8QtXI_O8cv0HQnnxUze2ej3viiucc69u7BIDEBt6YVJqJoA/exec'
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw_770_iqIlOcmfX0PnZGK_5wpy9PA-7jPs6InTuTQGeAWTP3Eh6XIAo9V-5Vpal1eDWA/exec'
 };
 
 const BARISTA_DATA = {

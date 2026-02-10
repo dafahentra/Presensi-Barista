@@ -1,6 +1,3 @@
-// ✅ SECURE BACKEND - Google Apps Script
-// PERBAIKAN KEAMANAN LENGKAP
-
 const CONFIG = {
   SPREADSHEET_ID: '1mkF5sZEUlzicIE2_32ZVppAYQ-gjSDgOWZX8wYIxx6E',
   SHEET_BARISTA: 'Database Barista',
@@ -8,60 +5,29 @@ const CONFIG = {
   EMAIL_ADMIN: ['dafahentra@gmail.com'],
   NAMA_PERUSAHAAN: 'SECTOR SEVEN',
   CAFE_LOCATION: {
-    lat: -7.783172162412872,
-    lng: 110.40523663297974
+    lat: -7.770132025075595,
+    lng: 110.3799652041438
   },
   MAX_DISTANCE: 100, // meters
   MAX_PIN_ATTEMPTS: 5, // Rate limiting
   PIN_TIMEOUT: 300000 // 5 minutes
 };
 
-// Rate limiting -- pakai CacheService supaya persisten antar request
-// (const pinAttempts = {} TIDAK berfungsi karena reset tiap invocation)
+// Rate limiting cache
+const pinAttempts = {};
 
-// Handle GET
+// ✅ Handle GET - untuk load data (tanpa PIN)
 function doGet(e) {
   try {
     const action = e.parameter.action;
     
     if (action === 'getBaristaList') {
+      // ✅ Return nama saja, TANPA PIN!
       return getBaristaListPublic();
     }
     
     if (action === 'getHistory') {
       return getAttendanceHistory();
-    }
-    
-    // Attendance via GET -- data dikirim sebagai JSON di parameter ?data=...
-    // POST ke GAS bermasalah karena 302 redirect yang membuat browser kehilangan response
-    // GET dengan HTTPS tetap aman (URL terenkripsi end-to-end)
-    if (action === 'attendance') {
-      const rawData = e.parameter.data;
-      if (!rawData) {
-        return jsonResponse({ success: false, message: 'Data tidak ditemukan' });
-      }
-      
-      const data = JSON.parse(rawData);
-      
-      const validation = validateAttendance(data);
-      if (!validation.success) {
-        return jsonResponse(validation);
-      }
-      
-      const result = saveAttendance({
-        timestamp: data.timestamp,
-        baristaId: data.baristaId,
-        baristaName: validation.baristaName,
-        type: data.type,
-        location: data.latitude + ', ' + data.longitude,
-        distance: validation.distance
-      });
-      
-      return jsonResponse({ 
-        success: true, 
-        message: (data.type === 'in' ? 'Check In' : 'Check Out') + ' berhasil! ' + validation.baristaName,
-        data: result 
-      });
     }
     
     return jsonResponse({ success: false, message: 'Invalid action' });
@@ -160,22 +126,27 @@ function validateAttendance(data) {
   };
 }
 
-// Rate Limiting -- pakai CacheService (persisten antar request, TTL otomatis)
+// ✅ Rate Limiting
 function checkRateLimit(baristaId) {
-  const cache = CacheService.getScriptCache();
-  const key = 'pin_attempts_' + baristaId;
-  const cached = cache.get(key);
+  const now = Date.now();
+  const attempts = pinAttempts[baristaId];
   
-  if (!cached) {
+  if (!attempts) {
     return { success: true };
   }
   
-  const attempts = JSON.parse(cached);
+  // Reset if timeout passed
+  if (now - attempts.firstAttempt > CONFIG.PIN_TIMEOUT) {
+    delete pinAttempts[baristaId];
+    return { success: true };
+  }
   
+  // Check max attempts
   if (attempts.count >= CONFIG.MAX_PIN_ATTEMPTS) {
+    const remainingTime = Math.ceil((CONFIG.PIN_TIMEOUT - (now - attempts.firstAttempt)) / 60000);
     return { 
       success: false, 
-      message: 'Terlalu banyak percobaan PIN gagal. Coba lagi dalam beberapa menit.' 
+      message: `Terlalu banyak percobaan gagal. Coba lagi dalam ${remainingTime} menit` 
     };
   }
   
@@ -183,25 +154,20 @@ function checkRateLimit(baristaId) {
 }
 
 function recordFailedAttempt(baristaId) {
-  const cache = CacheService.getScriptCache();
-  const key = 'pin_attempts_' + baristaId;
-  const cached = cache.get(key);
-  let attempts;
+  const now = Date.now();
   
-  if (!cached) {
-    attempts = { count: 1 };
+  if (!pinAttempts[baristaId]) {
+    pinAttempts[baristaId] = {
+      count: 1,
+      firstAttempt: now
+    };
   } else {
-    attempts = JSON.parse(cached);
-    attempts.count++;
+    pinAttempts[baristaId].count++;
   }
-  
-  // TTL 300 detik = 5 menit, lalu auto-reset
-  cache.put(key, JSON.stringify(attempts), 300);
 }
 
 function resetAttempts(baristaId) {
-  const cache = CacheService.getScriptCache();
-  cache.remove('pin_attempts_' + baristaId);
+  delete pinAttempts[baristaId];
 }
 
 // ✅ Get barista data with PIN (PRIVATE - server only)
