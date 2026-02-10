@@ -1,10 +1,10 @@
 const CONFIG = {
     CAFE_LOCATION: {
-        lat: -7.7834379122821655,
-        lng: 110.40534392133692
+        lat: -7.7702064373688255,
+        lng: 110.37958969489374
     },
     MAX_DISTANCE: 100, // meters
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyIcm6_0DNdskBNsgprF2-kiEPylT7_7ibOeqYAmXYpldmNPNpOKZkUJme4ca7gtD2A5w/exec'
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwOM0X0zuUwUyyOdcI54DT-CCDzyq6c9wSj0-yn7I6jtOrOp80IvyfyPRoBg4C8hLNStQ/exec'
 };
 
 const BARISTA_DATA = {
