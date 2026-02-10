@@ -1,11 +1,10 @@
 const CONFIG = {
     CAFE_LOCATION: {
-        lat: -7.770132025075595,
-        lng: 110.3799652041438
+        lat: -7.7834379122821655,
+        lng: 110.40534392133692
     },
     MAX_DISTANCE: 100, // meters
-    // ⚠️ GANTI URL INI DENGAN URL DEPLOYMENT BARU ANDA!
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw_770_iqIlOcmfX0PnZGK_5wpy9PA-7jPs6InTuTQGeAWTP3Eh6XIAo9V-5Vpal1eDWA/exec'
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyIcm6_0DNdskBNsgprF2-kiEPylT7_7ibOeqYAmXYpldmNPNpOKZkUJme4ca7gtD2A5w/exec'
 };
 
 const BARISTA_DATA = {
@@ -397,17 +396,14 @@ async function handleAttendance(type) {
     try {
         // Prepare data
         const attendanceData = {
+            action: 'attendance',
             timestamp: new Date().toISOString(),
             baristaId: baristaId,
             baristaName: BARISTA_DATA[baristaId].name,
+            pin: pin,
             type: type,
-            location: `${currentLocation.lat}, ${currentLocation.lng}`,
-            distance: calculateDistance(
-                currentLocation.lat,
-                currentLocation.lng,
-                CONFIG.CAFE_LOCATION.lat,
-                CONFIG.CAFE_LOCATION.lng
-            )
+            latitude: currentLocation.lat,
+            longitude: currentLocation.lng
         };
 
         console.log('📤 Sending to backend:', attendanceData);
