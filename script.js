@@ -3,7 +3,7 @@ const CONFIG = {
         lat: -7.770132025075595,
         lng: 110.3799652041438
     },
-    MAX_DISTANCE: 100, // meters
+    MAX_DISTANCE: 10000, // meters
     // ⚠️ GANTI URL INI DENGAN URL DEPLOYMENT BARU ANDA!
     GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwpRtLg3zSx2sL_rdFpN8P8QtXI_O8cv0HQnnxUze2ej3viiucc69u7BIDEBt6YVJqJoA/exec'
 };
