@@ -13,13 +13,14 @@ const BARISTA_DATA = {
     '3': { name: 'Rilies', pin: '3030' },
     '4': { name: 'Rio', pin: '1708' },
     '5': { name: 'Taqiy', pin: '9111' },
-    '6': { name: 'Salma', pin: '2512' },
-    '7': { name: 'Ibriel', pin: '1397' },
-    '8': { name: 'Abey', pin: '2580' },
-    '9': { name: 'Claresta', pin: '1473' },
-    '10': { name: 'Dafa', pin: '2809' },
-    '11': { name: 'Devon', pin: '5288' },
-    '12': { name: 'Intan', pin: '4462' }
+    '6': { name: 'Jagad', pin: '1212' },
+    '7': { name: 'Sekar', pin: '2121' },
+    '8': { name: 'Salma', pin: '2512' },
+    '9': { name: 'Ibriel', pin: '1397' },
+    '10': { name: 'Claresta', pin: '1473' },
+    '11': { name: 'Dafa', pin: '2809' },
+    '12': { name: 'Devon', pin: '5288' },
+    '13': { name: 'Intan', pin: '4462' }
 };
 
 // Global state
