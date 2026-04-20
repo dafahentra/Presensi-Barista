@@ -1,36 +1,21 @@
+// ================================
+// KONFIGURASI
+// ================================
 const CONFIG = {
-    CAFE_LOCATION: {
-        lat: -7.7702064373688255,
-        lng: 110.37958969489374
-    },
-    MAX_DISTANCE: 75, // meters
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxGmPqmQplPWsfBOJy_K1tQzGP7un19Dme3VSV59mWvKPJvFqg9AEwKhJFMmtbsH6ksQg/exec'
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxGmPqmQplPWsfBOJy_K1tQzGP7un19Dme3VSV59mWvKPJvFqg9AEwKhJFMmtbsH6ksQg/exec',
+    BARISTA_REFRESH_INTERVAL: 30000,  // 30 detik (sync langsung dari sheet)
+    HISTORY_REFRESH_INTERVAL: 15000   // 15 detik
 };
 
-const BARISTA_DATA = {
-    '1': { name: 'Abida', pin: '4927' },
-    '2': { name: 'Aca', pin: '8153' },
-    '3': { name: 'Rilies', pin: '3030' },
-    '4': { name: 'Rio', pin: '1708' },
-    '5': { name: 'Taqiy', pin: '9111' },
-    '6': { name: 'Jagad', pin: '1212' },
-    '7': { name: 'Sekar', pin: '2121' },
-    '8': { name: 'Salma', pin: '2512' },
-    '9': { name: 'Ibriel', pin: '1397' },
-    '10': { name: 'Claresta', pin: '1473' },
-    '11': { name: 'Dafa', pin: '2809' },
-    '12': { name: 'Devon', pin: '5288' },
-    '13': { name: 'Intan', pin: '4462' }
-};
+// Lokasi cafe & radius dimuat dari backend (single source of truth)
+let CAFE_LOCATION = null;
+let MAX_DISTANCE = null;
 
-// Global state
+// ================================
+// GLOBAL STATE
+// ================================
 let currentLocation = null;
 let isInRange = false;
-let durationInterval = null;
-let todayAttendance = {
-    checkIn: null,
-    checkOut: null
-};
 
 // Map variables
 let map = null;
@@ -38,333 +23,300 @@ let cafeMarker = null;
 let userMarker = null;
 let radiusCircle = null;
 
-// DOM Elements
+// ================================
+// DOM ELEMENTS
+// ================================
 const elements = {
-    datetime: document.getElementById('datetime'),
-    locationStatus: document.getElementById('locationStatus'),
-    baristaName: document.getElementById('baristaName'),
-    pin: document.getElementById('pin'),
-    checkInBtn: document.getElementById('checkInBtn'),
-    checkOutBtn: document.getElementById('checkOutBtn'),
-    message: document.getElementById('message'),
-    todayHistory: document.getElementById('todayHistory'),
-    durationCard: document.getElementById('durationCard'),
-    durationTime: document.getElementById('durationTime'),
-    checkInTime: document.getElementById('checkInTime'),
-    checkOutTime: document.getElementById('checkOutTime'),
-    checkOutStatus: document.getElementById('checkOutStatus'),
-    circleProgress: document.getElementById('circleProgress'),
-    latValue: document.getElementById('latValue'),
-    lngValue: document.getElementById('lngValue'),
-    radiusStatus: document.getElementById('radiusStatus'),
-    radiusText: document.getElementById('radiusText')
+    datetime:       document.getElementById('datetime'),
+    baristaName:    document.getElementById('baristaName'),
+    pin:            document.getElementById('pin'),
+    checkInBtn:     document.getElementById('checkInBtn'),
+    checkOutBtn:    document.getElementById('checkOutBtn'),
+    message:        document.getElementById('message'),
+    todayHistory:   document.getElementById('todayHistory'),
+    latValue:       document.getElementById('latValue'),
+    lngValue:       document.getElementById('lngValue'),
+    radiusStatus:   document.getElementById('radiusStatus'),
+    radiusText:     document.getElementById('radiusText')
 };
 
-// Initialize
+// ================================
+// INIT
+// ================================
 document.addEventListener('DOMContentLoaded', init);
 
-function init() {
-    console.log('🚀 Initializing app...');
-    console.log('📍 Protocol:', window.location.protocol);
-    console.log('🗺️ Leaflet available:', typeof L !== 'undefined');
-    
-    // Check HTTPS
-    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-        console.warn('⚠️ WARNING: Not using HTTPS! GPS may not work.');
-        showMessage('error', 'Website harus menggunakan HTTPS untuk akses GPS!');
-    }
-    
+async function init() {
     updateDateTime();
     setInterval(updateDateTime, 1000);
     initMap();
-    requestLocation();
+
+    // Jalankan config (sekaligus barista list) dan geolocation secara paralel
+    await Promise.all([
+        loadConfigAndBarista(),
+        startGeolocation()
+    ]);
+
     loadTodayHistory();
-    
-    // Event listeners
+
     elements.checkInBtn.addEventListener('click', () => handleAttendance('in'));
     elements.checkOutBtn.addEventListener('click', () => handleAttendance('out'));
-    elements.pin.addEventListener('input', handlePinInput);
-    
-    // Refresh history every 30 seconds
-    setInterval(loadTodayHistory, 30000);
+    elements.pin.addEventListener('input', e => {
+        e.target.value = e.target.value.replace(/[^0-9]/g, '');
+    });
+
+    // Auto-refresh: barista list dan history (sinkron perubahan dari sheet)
+    setInterval(refreshBaristaList, CONFIG.BARISTA_REFRESH_INTERVAL);
+    setInterval(loadTodayHistory, CONFIG.HISTORY_REFRESH_INTERVAL);
 }
 
-// Initialize map
-function initMap() {
-    console.log('🗺️ Initializing map...');
-    
+// ================================
+// CONFIG + BARISTA LIST (1 Request, Single Source of Truth)
+// ================================
+async function loadConfigAndBarista() {
     try {
-        // Check if Leaflet is loaded
-        if (typeof L === 'undefined') {
-            console.error('❌ Leaflet library not loaded!');
-            showMessage('error', 'Map library gagal dimuat. Refresh halaman.');
+        const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=getConfig`);
+        if (!response.ok) throw new Error('Network error');
+
+        const result = await response.json();
+        if (result.success && result.data) {
+            CAFE_LOCATION = result.data.cafeLocation;
+            MAX_DISTANCE  = result.data.maxDistance;
+            updateMapCafeMarker();
+
+            // Populate barista langsung dari response yang sama (tidak perlu request terpisah)
+            if (result.data.baristaList) {
+                populateBaristaSelect(result.data.baristaList);
+            }
+        } else {
+            console.error('Gagal memuat konfigurasi:', result.message);
+        }
+    } catch (error) {
+        console.error('Error loading config:', error);
+    }
+}
+
+// Refresh barista list saja (untuk sinkron perubahan dari sheet)
+async function refreshBaristaList() {
+    try {
+        const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=getBaristaList`);
+        if (!response.ok) throw new Error('Network error');
+
+        const result = await response.json();
+        if (result.success && result.data) {
+            populateBaristaSelect(result.data);
+        }
+    } catch (error) {
+        console.error('Error refreshing barista list:', error);
+    }
+}
+
+function populateBaristaSelect(baristaList) {
+    const select = elements.baristaName;
+    const selectedValue = select.value; // simpan pilihan saat ini
+
+    select.innerHTML = '<option value="">-- Pilih Barista --</option>';
+
+    Object.entries(baristaList).forEach(([id, barista]) => {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = barista.name;
+        select.appendChild(option);
+    });
+
+    // Kembalikan pilihan sebelumnya jika masih ada
+    if (selectedValue) select.value = selectedValue;
+}
+
+// ================================
+// MAP
+// ================================
+function initMap() {
+    if (typeof L === 'undefined') {
+        showMessage('error', 'Map library gagal dimuat. Refresh halaman.');
+        return;
+    }
+
+    const defaultCenter = [-7.571176486584326, 110.87119846027448];
+
+    map = L.map('map', {
+        center: defaultCenter,
+        zoom: 17,
+        zoomControl: true,
+        scrollWheelZoom: false
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
+    }).addTo(map);
+}
+
+function updateMapCafeMarker() {
+    if (!map || !CAFE_LOCATION) return;
+
+    if (cafeMarker) map.removeLayer(cafeMarker);
+    if (radiusCircle) map.removeLayer(radiusCircle);
+
+    const cafeIcon = L.divIcon({
+        className: 'custom-cafe-marker',
+        html: '<div style="background-color:#333;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"><div style="background-color:white;width:10px;height:10px;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg)"></div></div>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30]
+    });
+
+    cafeMarker = L.marker([CAFE_LOCATION.lat, CAFE_LOCATION.lng], { icon: cafeIcon }).addTo(map);
+    cafeMarker.bindPopup('<b>SECTOR SEVEN</b><br>Lokasi Cafe').openPopup();
+
+    radiusCircle = L.circle([CAFE_LOCATION.lat, CAFE_LOCATION.lng], {
+        color: '#4CAF50',
+        fillColor: '#4CAF50',
+        fillOpacity: 0.15,
+        radius: MAX_DISTANCE,
+        weight: 2,
+        dashArray: '5, 5'
+    }).addTo(map);
+
+    radiusCircle.bindPopup(`Area kerja (radius ${MAX_DISTANCE}m)`);
+    map.setView([CAFE_LOCATION.lat, CAFE_LOCATION.lng], 17);
+}
+
+function updateMapUserLocation(lat, lng, inRange) {
+    if (!map) return;
+
+    if (userMarker) map.removeLayer(userMarker);
+
+    const markerColor = inRange ? '#2196F3' : '#f44336';
+    const userIcon = L.divIcon({
+        className: 'custom-user-marker',
+        html: `<div style="background-color:${markerColor};width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"></div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+
+    userMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map);
+
+    const distance = calculateDistance(lat, lng, CAFE_LOCATION.lat, CAFE_LOCATION.lng);
+    userMarker.bindPopup(`<b>Lokasi Anda</b><br>${inRange ? 'Dalam area kerja' : 'Di luar area kerja'}<br>Jarak: ${Math.round(distance)}m`);
+
+    map.fitBounds(L.latLngBounds([
+        [CAFE_LOCATION.lat, CAFE_LOCATION.lng],
+        [lat, lng]
+    ]), { padding: [50, 50] });
+}
+
+// ================================
+// DATE TIME
+// ================================
+function updateDateTime() {
+    document.getElementById('datetime').textContent = new Date().toLocaleDateString('id-ID', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+}
+
+// ================================
+// GEOLOCATION (Cepat: tanpa enableHighAccuracy)
+// ================================
+function startGeolocation() {
+    return new Promise(resolve => {
+        if (!navigator.geolocation) {
+            updateRadiusStatus('error', 'Browser tidak mendukung GPS');
+            resolve();
             return;
         }
-        
-        // Create map centered on cafe location
-        map = L.map('map', {
-            center: [CONFIG.CAFE_LOCATION.lat, CONFIG.CAFE_LOCATION.lng],
-            zoom: 17,
-            zoomControl: true,
-            scrollWheelZoom: false
-        });
-        
-        console.log('✅ Map object created');
 
-        // Add tile layer (OpenStreetMap)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            maxZoom: 19
-        }).addTo(map);
-        
-        console.log('✅ Map tiles loaded');
+        updateRadiusStatus('checking', 'Memeriksa lokasi...');
 
-        // Add cafe marker (red marker)
-        const cafeIcon = L.divIcon({
-            className: 'custom-cafe-marker',
-            html: '<div style="background-color: #333; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"><div style="background-color: white; width: 10px; height: 10px; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(45deg);"></div></div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 30]
-        });
-
-        cafeMarker = L.marker([CONFIG.CAFE_LOCATION.lat, CONFIG.CAFE_LOCATION.lng], {
-            icon: cafeIcon
-        }).addTo(map);
-        
-        cafeMarker.bindPopup('<b>SECTOR SEVEN</b><br>Lokasi Cafe').openPopup();
-        
-        console.log('✅ Cafe marker added');
-
-        // Add radius circle (100m)
-        radiusCircle = L.circle([CONFIG.CAFE_LOCATION.lat, CONFIG.CAFE_LOCATION.lng], {
-            color: '#4CAF50',
-            fillColor: '#4CAF50',
-            fillOpacity: 0.15,
-            radius: CONFIG.MAX_DISTANCE,
-            weight: 2,
-            dashArray: '5, 5'
-        }).addTo(map);
-
-        radiusCircle.bindPopup(`Area kerja (radius ${CONFIG.MAX_DISTANCE}m)`);
-        
-        console.log('✅ Map initialization complete');
-        
-    } catch (error) {
-        console.error('❌ Map initialization error:', error);
-        showMessage('error', 'Gagal memuat peta: ' + error.message);
-    }
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                handleLocationSuccess(position);
+                resolve();
+            },
+            error => {
+                handleLocationError(error);
+                resolve();
+            },
+            {
+                enableHighAccuracy: false, // Lebih cepat, pakai WiFi/cell tower
+                timeout: 8000,
+                maximumAge: 120000         // Cache lokasi 2 menit
+            }
+        );
+    });
 }
 
-// Update map with user location
-function updateMapUserLocation(lat, lng, inRange) {
-    if (!map) {
-        console.error('❌ Map not initialized yet');
-        return;
-    }
-    
-    try {
-        // Remove old user marker if exists
-        if (userMarker) {
-            map.removeLayer(userMarker);
-        }
-
-        // Create user marker icon (blue for in range, red for out of range)
-        const markerColor = inRange ? '#2196F3' : '#f44336';
-        const userIcon = L.divIcon({
-            className: 'custom-user-marker',
-            html: `<div style="background-color: ${markerColor}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-        });
-
-        // Add user marker
-        userMarker = L.marker([lat, lng], {
-            icon: userIcon
-        }).addTo(map);
-
-        const distance = calculateDistance(lat, lng, CONFIG.CAFE_LOCATION.lat, CONFIG.CAFE_LOCATION.lng);
-        const statusText = inRange ? 'Dalam area kerja' : 'Di luar area kerja';
-        userMarker.bindPopup(`<b>Lokasi Anda</b><br>${statusText}<br>Jarak: ${Math.round(distance)}m`);
-
-        // Fit bounds to show both markers
-        const bounds = L.latLngBounds([
-            [CONFIG.CAFE_LOCATION.lat, CONFIG.CAFE_LOCATION.lng],
-            [lat, lng]
-        ]);
-        map.fitBounds(bounds, { padding: [50, 50] });
-        
-        console.log('✅ User location marker updated');
-        
-    } catch (error) {
-        console.error('❌ Error updating user location on map:', error);
-    }
-}
-
-// Update date and time
-function updateDateTime() {
-    const now = new Date();
-    const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    };
-    elements.datetime.textContent = now.toLocaleDateString('id-ID', options);
-}
-
-// Request geolocation
+// Untuk refresh manual (tombol atau watch)
 function requestLocation() {
-    console.log('📍 Requesting geolocation...');
-    console.log('Navigator.geolocation:', navigator.geolocation);
-    console.log('Current protocol:', window.location.protocol);
-    
     if (!navigator.geolocation) {
-        console.error('❌ Geolocation not supported');
-        updateLocationStatus('error', 'Browser tidak mendukung GPS');
+        updateRadiusStatus('error', 'Browser tidak mendukung GPS');
+        return;
+    }
+    updateRadiusStatus('checking', 'Memeriksa lokasi...');
+    navigator.geolocation.getCurrentPosition(
+        handleLocationSuccess,
+        handleLocationError,
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 }
+    );
+}
+
+function handleLocationSuccess(position) {
+    if (!CAFE_LOCATION || !MAX_DISTANCE) {
+        setTimeout(() => handleLocationSuccess(position), 500);
         return;
     }
 
-    updateLocationStatus('checking', 'Memeriksa lokasi...');
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    const distance = calculateDistance(lat, lng, CAFE_LOCATION.lat, CAFE_LOCATION.lng);
+    const inRange = distance <= MAX_DISTANCE;
 
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            console.log('✅ Location obtained:', position);
-            handleLocationSuccess(position);
-        },
-        (error) => {
-            console.error('❌ Location error:', error);
-            handleLocationError(error);
-        },
-        { 
-            enableHighAccuracy: true, 
-            timeout: 30000,  // Increased timeout
-            maximumAge: 0 
-        }
-    );
-}
+    currentLocation = { lat, lng };
+    isInRange = inRange;
 
-// Handle location success
-function handleLocationSuccess(position) {
-    currentLocation = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-    };
-    
-    console.log('📍 Current location:', currentLocation);
+    if (elements.latValue) elements.latValue.textContent = lat.toFixed(6);
+    if (elements.lngValue) elements.lngValue.textContent = lng.toFixed(6);
 
-    const distance = calculateDistance(
-        currentLocation.lat,
-        currentLocation.lng,
-        CONFIG.CAFE_LOCATION.lat,
-        CONFIG.CAFE_LOCATION.lng
-    );
-    
-    console.log('📏 Distance from cafe:', Math.round(distance), 'meters');
-
-    isInRange = distance <= CONFIG.MAX_DISTANCE;
-
-    if (isInRange) {
-        updateLocationStatus('in-range', `Anda berada di lokasi kerja (${Math.round(distance)}m)`);
+    if (inRange) {
+        updateRadiusStatus('in-range', `Dalam Radius: ${Math.round(distance)} meter`);
     } else {
-        updateLocationStatus('out-range', `Anda terlalu jauh dari lokasi (${Math.round(distance)}m)`);
+        updateRadiusStatus('out-range', `Di Luar Radius: ${Math.round(distance)} meter`);
     }
 
-    // Update map with user location
-    updateMapUserLocation(currentLocation.lat, currentLocation.lng, isInRange);
-    
-    // Update coordinates and radius status display
-    updateCoordinatesDisplay(currentLocation.lat, currentLocation.lng, distance, isInRange);
+    updateMapUserLocation(lat, lng, inRange);
 }
 
-// Update coordinates display and radius status
-function updateCoordinatesDisplay(lat, lng, distance, inRange) {
-    // Update coordinates
-    if (elements.latValue) {
-        elements.latValue.textContent = lat.toFixed(6);
-    }
-    if (elements.lngValue) {
-        elements.lngValue.textContent = lng.toFixed(6);
-    }
-    
-    // Update radius status
-    if (elements.radiusStatus && elements.radiusText) {
-        if (inRange) {
-            elements.radiusStatus.className = 'radius-status in-range';
-            elements.radiusText.textContent = `Dalam Radius: ${Math.round(distance)} meter`;
-        } else {
-            elements.radiusStatus.className = 'radius-status out-range';
-            elements.radiusText.textContent = `Di Luar Radius: ${Math.round(distance)} meter`;
-        }
-    }
-}
-
-// Handle location error
 function handleLocationError(error) {
-    let errorMessage = 'Tidak dapat mengakses lokasi';
-    
-    console.error('Location error code:', error.code);
-    console.error('Location error message:', error.message);
-    
-    switch(error.code) {
-        case error.PERMISSION_DENIED:
-            errorMessage = 'Izin lokasi ditolak. Mohon aktifkan GPS';
-            console.error('❌ User denied location permission');
-            break;
-        case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Informasi lokasi tidak tersedia';
-            console.error('❌ Location information unavailable');
-            break;
-        case error.TIMEOUT:
-            errorMessage = 'Permintaan lokasi timeout. Coba lagi.';
-            console.error('❌ Location request timed out');
-            break;
-    }
-    
-    updateLocationStatus('error', errorMessage);
+    const messages = {
+        [error.PERMISSION_DENIED]:    'Izin lokasi ditolak. Mohon aktifkan GPS',
+        [error.POSITION_UNAVAILABLE]: 'Informasi lokasi tidak tersedia',
+        [error.TIMEOUT]:              'Permintaan lokasi timeout. Coba lagi.'
+    };
+    updateRadiusStatus('error', messages[error.code] || 'Tidak dapat mengakses lokasi');
     isInRange = false;
-    
-    // Update radius status
-    if (elements.radiusStatus && elements.radiusText) {
-        elements.radiusStatus.className = 'radius-status error';
-        elements.radiusText.textContent = errorMessage;
-    }
 }
 
-// Update location status UI
-function updateLocationStatus(status, text) {
-    elements.locationStatus.className = 'location-status ' + status;
-    elements.locationStatus.querySelector('.status-text').textContent = text;
+function updateRadiusStatus(cssClass, text) {
+    if (elements.radiusStatus) elements.radiusStatus.className = `radius-status ${cssClass}`;
+    if (elements.radiusText)   elements.radiusText.textContent = text;
 }
 
-// Calculate distance between two coordinates (Haversine formula)
+// ================================
+// DISTANCE (Haversine)
+// ================================
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // Earth radius in meters
+    const R = 6371e3;
     const phi1 = lat1 * Math.PI / 180;
     const phi2 = lat2 * Math.PI / 180;
-    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
-    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-              Math.cos(phi1) * Math.cos(phi2) *
-              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
+    const dPhi = (lat2 - lat1) * Math.PI / 180;
+    const dLam = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLam / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Handle PIN input (only numbers)
-function handlePinInput(e) {
-    e.target.value = e.target.value.replace(/[^0-9]/g, '');
-}
-
-// Handle attendance (Check In/Out)
+// ================================
+// ATTENDANCE HANDLER
+// ================================
 async function handleAttendance(type) {
-    console.log(`📝 Attempting ${type === 'in' ? 'check-in' : 'check-out'}...`);
-    
-    // Validation
     const baristaId = elements.baristaName.value;
     const pin = elements.pin.value;
 
@@ -372,109 +324,61 @@ async function handleAttendance(type) {
         showMessage('error', 'Silakan pilih nama barista');
         return;
     }
-
     if (pin.length !== 4) {
         showMessage('error', 'PIN harus 4 digit');
         return;
     }
-
-    // Verify PIN
-    if (BARISTA_DATA[baristaId].pin !== pin) {
-        showMessage('error', 'PIN salah!');
-        return;
-    }
-
-    // Check location
     if (!isInRange) {
         showMessage('error', 'Anda berada di luar radius lokasi kerja');
         return;
     }
 
-    // Disable buttons
     elements.checkInBtn.disabled = true;
     elements.checkOutBtn.disabled = true;
 
     try {
-        // Prepare data
-        const attendanceData = {
-            action: 'attendance',
-            timestamp: new Date().toISOString(),
-            baristaId: baristaId,
-            baristaName: BARISTA_DATA[baristaId].name,
-            pin: pin,
-            type: type,
-            latitude: currentLocation.lat,
-            longitude: currentLocation.lng
-        };
+        const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            // Tanpa Content-Type header agar tidak trigger CORS preflight
+            body: JSON.stringify({
+                action: 'attendance',
+                timestamp: new Date().toISOString(),
+                baristaId,
+                pin,
+                type,
+                latitude: currentLocation.lat,
+                longitude: currentLocation.lng
+            })
+        });
 
-        console.log('📤 Sending to backend:', attendanceData);
+        const result = await response.json();
 
-        // Send to Google Sheets
-        await sendToGoogleSheets(attendanceData);
-
-        // Success
-        const typeText = type === 'in' ? 'Check In' : 'Check Out';
-        showMessage('success', `${typeText} berhasil! ${type === 'in' ? 'Selamat bekerja' : 'Terima kasih'}, ${BARISTA_DATA[baristaId].name}`);
-
-        // Reset form
-        elements.baristaName.value = '';
-        elements.pin.value = '';
-
-        // Refresh history after a short delay
-        setTimeout(() => {
-            loadTodayHistory();
-        }, 2000);
+        if (result.success) {
+            showMessage('success', result.message);
+            elements.baristaName.value = '';
+            elements.pin.value = '';
+            setTimeout(loadTodayHistory, 1500);
+        } else {
+            showMessage('error', result.message || 'Gagal menyimpan presensi');
+        }
 
     } catch (error) {
-        console.error('❌ Attendance error:', error);
-        showMessage('error', 'Gagal menyimpan presensi: ' + error.message);
+        showMessage('error', 'Gagal menghubungi server: ' + error.message);
     } finally {
-        // Enable buttons
         elements.checkInBtn.disabled = false;
         elements.checkOutBtn.disabled = false;
     }
 }
 
-// Send data to Google Sheets
-async function sendToGoogleSheets(data) {
-    console.log('📡 Sending to Google Sheets...');
-    
-    try {
-        const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        });
-
-        console.log('✅ Data sent (no-cors mode, cannot verify response)');
-        // Note: no-cors mode won't return response data
-        // We assume success if no error is thrown
-        return true;
-        
-    } catch (error) {
-        console.error('❌ Failed to send to Google Sheets:', error);
-        throw error;
-    }
-}
-
-// Load today's attendance history
+// ================================
+// HISTORY
+// ================================
 async function loadTodayHistory() {
-    console.log('📋 Loading history...');
-    
     try {
         const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=getHistory`);
-        
-        console.log('Response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        
+        if (!response.ok) throw new Error('Network error');
+
         const result = await response.json();
-        console.log('✅ History data received:', result);
 
         if (result.success && result.data && result.data.length > 0) {
             displayHistory(result.data);
@@ -482,42 +386,27 @@ async function loadTodayHistory() {
             elements.todayHistory.innerHTML = '<p class="no-data">Belum ada presensi hari ini</p>';
         }
     } catch (error) {
-        console.error('❌ Error loading history:', error);
         elements.todayHistory.innerHTML = '<p class="no-data">Gagal memuat riwayat</p>';
     }
 }
 
-// Display history
 function displayHistory(data) {
-    console.log('📊 Displaying', data.length, 'history items');
-    
-    let html = '';
-    data.forEach(item => {
-        const typeClass = item.type === 'in' ? 'check-in' : 'check-out';
-        const badgeClass = item.type === 'in' ? 'in' : 'out';
-        const badgeText = item.type === 'in' ? 'Masuk' : 'Keluar';
-
-        html += `
-            <div class="history-item ${typeClass}">
-                <div class="history-info">
-                    <div class="history-name">${item.name}</div>
-                    <div class="history-time">${item.waktu}</div>
-                </div>
-                <span class="history-badge ${badgeClass}">${badgeText}</span>
+    elements.todayHistory.innerHTML = data.map(item => `
+        <div class="history-item ${item.type === 'in' ? 'check-in' : 'check-out'}">
+            <div class="history-info">
+                <div class="history-name">${item.name}</div>
+                <div class="history-time">${item.waktu}</div>
             </div>
-        `;
-    });
-
-    elements.todayHistory.innerHTML = html;
+            <span class="history-badge ${item.type === 'in' ? 'in' : 'out'}">${item.type === 'in' ? 'Masuk' : 'Keluar'}</span>
+        </div>
+    `).join('');
 }
 
-// Show message
+// ================================
+// MESSAGE
+// ================================
 function showMessage(type, text) {
     elements.message.className = `message ${type} show`;
     elements.message.textContent = text;
-
-    // Auto hide after 5 seconds
-    setTimeout(() => {
-        elements.message.classList.remove('show');
-    }, 5000);
+    setTimeout(() => elements.message.classList.remove('show'), 5000);
 }

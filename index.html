@@ -29,41 +29,8 @@
                     <div class="coordinates-compact">
                         Lat: <span id="latValue">--.------</span> | Lng: <span id="lngValue">--.------</span>
                     </div>
-                    <div class="radius-status" id="radiusStatus">
+                    <div class="radius-status checking" id="radiusStatus">
                         <span id="radiusText">Memeriksa lokasi...</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Hidden location status for compatibility -->
-            <div class="location-status" id="locationStatus" style="display: none;">
-                <span class="status-icon">â—</span>
-                <span class="status-text">Memeriksa lokasi...</span>
-            </div>
-
-            <!-- Work Duration Card -->
-            <div class="duration-card" id="durationCard" style="display: none;">
-                <div class="duration-circle">
-                    <svg width="200" height="200" viewBox="0 0 200 200">
-                        <circle class="circle-bg" cx="100" cy="100" r="90"></circle>
-                        <circle class="circle-progress" id="circleProgress" cx="100" cy="100" r="90" 
-                                stroke-dasharray="565.48" stroke-dashoffset="565.48"></circle>
-                    </svg>
-                    <div class="duration-text">
-                        <div class="duration-label">working hours</div>
-                        <div class="duration-time" id="durationTime">00:00</div>
-                    </div>
-                </div>
-                <div class="time-info">
-                    <div class="time-item">
-                        <div class="time-label">Check-In</div>
-                        <div class="time-value" id="checkInTime">--:--</div>
-                        <div class="time-status">Online</div>
-                    </div>
-                    <div class="time-item">
-                        <div class="time-label">Check-Out</div>
-                        <div class="time-value" id="checkOutTime">--:--</div>
-                        <div class="time-status" id="checkOutStatus">--</div>
                     </div>
                 </div>
             </div>
@@ -71,36 +38,23 @@
             <!-- Card Presensi -->
             <div class="card">
                 <h2 class="card-title">Presensi Barista</h2>
-                
-                <!-- Dropdown Nama -->
+
+                <!-- Dropdown Nama - diisi otomatis dari sheet -->
                 <div class="form-group">
                     <label for="baristaName">Pilih Nama</label>
                     <select id="baristaName" class="form-select">
-                        <option value="">-- Pilih Barista --</option>
-                        <option value="1">Abida</option>
-                        <option value="2">Aca</option>
-                        <option value="3">Rilies</option>
-                        <option value="4">Rio</option>
-                        <option value="5">Taqiy</option>
-                        <option value="6">Jagad</option>
-                        <option value="7">Sekar</option>
-                        <option value="8">Salma</option>
-                        <option value="9">Ibriel</option>
-                        <option value="10">Claresta</option>
-                        <option value="11">Dafa</option>
-                        <option value="12">Devon</option>
-                        <option value="13">Intan</option>
+                        <option value="">-- Memuat data... --</option>
                     </select>
                 </div>
 
                 <!-- PIN Input -->
                 <div class="form-group">
                     <label for="pin">PIN (4 Digit)</label>
-                    <input 
-                        type="password" 
-                        id="pin" 
-                        class="form-input" 
-                        maxlength="4" 
+                    <input
+                        type="password"
+                        id="pin"
+                        class="form-input"
+                        maxlength="4"
                         placeholder="****"
                         inputmode="numeric"
                     >
