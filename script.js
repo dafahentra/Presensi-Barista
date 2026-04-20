@@ -4,7 +4,7 @@ const CONFIG = {
         lng: 110.37958969489374
     },
     MAX_DISTANCE: 75, // meters
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzEViw2NQmvjoZVWrg7sjqImCNcCh5bahfBAZXt9iI7d9N6VOuSSk95dg6HJjtjR6yUlQ/exec'
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxGmPqmQplPWsfBOJy_K1tQzGP7un19Dme3VSV59mWvKPJvFqg9AEwKhJFMmtbsH6ksQg/exec'
 };
 
 const BARISTA_DATA = {
