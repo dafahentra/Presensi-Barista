@@ -1,0 +1,21 @@
+{
+	"geolocation": {
+		"data": {
+			"city": "Depok",
+			"country": {
+				"code": "ID",
+				"name": "Indonesia"
+			},
+			"subdivision": {
+				"code": "JB",
+				"name": "West Java"
+			},
+			"timezone": "Asia/Jakarta",
+			"latitude": -6.3936,
+			"longitude": 106.8917,
+			"postalCode": "16454"
+		},
+		"timestamp": 1776694124415
+	},
+	"siteId": "33e7be1f-68bd-41df-8cdf-b27200d0807d"
+}
