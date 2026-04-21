@@ -511,6 +511,75 @@ function showAdminMsg(text, type = 'success') {
     setTimeout(() => el.classList.remove('show'), 3000);
 }
 
+// ================================
+// TOAST NOTIFICATION (top center)
+// ================================
+function showToast(text, type = 'success') {
+    const existing = document.getElementById('toastNotif');
+    if (existing) existing.remove();
+
+    const svgCheck = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="8" fill="rgba(255,255,255,0.2)"/><path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const svgCross = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="8" fill="rgba(255,255,255,0.2)"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
+    const icon = type === 'error' ? svgCross : svgCheck;
+
+    const toast = document.createElement('div');
+    toast.id = 'toastNotif';
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `${icon}<span>${text}</span>`;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => toast.classList.add('toast-show'));
+    });
+
+    setTimeout(() => {
+        toast.classList.remove('toast-show');
+        toast.classList.add('toast-hide');
+        setTimeout(() => toast.remove(), 350);
+    }, 2800);
+}
+
+// ================================
+// MODAL KONFIRMASI
+// ================================
+function showConfirmModal(message, onConfirm) {
+    // Hapus modal lama jika ada
+    const existing = document.getElementById('confirmModal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'confirmModal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box">
+            <p class="modal-message">${message}</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-cancel">Batal</button>
+                <button class="btn btn-primary modal-confirm">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => overlay.classList.add('modal-show'));
+    });
+
+    function closeModal() {
+        overlay.classList.remove('modal-show');
+        setTimeout(() => overlay.remove(), 250);
+    }
+
+    overlay.querySelector('.modal-cancel').addEventListener('click', closeModal);
+    overlay.querySelector('.modal-confirm').addEventListener('click', () => {
+        closeModal();
+        onConfirm();
+    });
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+}
+
 async function loadAdminData() {
     await Promise.all([loadStoreStatus(), loadMenuItems()]);
 }
@@ -531,21 +600,27 @@ function renderStoreToggle() {
     const btn   = document.getElementById('storeToggleBtn');
     const label = document.getElementById('storeStatusLabel');
 
+    const svgOpen   = `<svg class="status-dot" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#16a34a"/></svg>`;
+    const svgClosed = `<svg class="status-dot" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#dc2626"/></svg>`;
+
     if (storeIsOpen) {
         btn.classList.add('on');
-        label.textContent = '🟢 Buka';
-        label.className   = 'store-status-label open';
+        label.innerHTML = `${svgOpen} Buka`;
+        label.className = 'store-status-label open';
     } else {
         btn.classList.remove('on');
-        label.textContent = '🔴 Tutup';
-        label.className   = 'store-status-label closed';
+        label.innerHTML = `${svgClosed} Tutup`;
+        label.className = 'store-status-label closed';
     }
 }
 
 async function toggleStore() {
+    const newVal = !storeIsOpen;
+    const label  = newVal ? 'membuka' : 'menutup';
+
+    showConfirmModal(`Yakin ingin ${label} toko?`, async () => {
     const btn    = document.getElementById('storeToggleBtn');
     btn.disabled = true;
-    const newVal = !storeIsOpen;
 
     try {
         const res  = await fetch(STORE_STATUS_URL, {
@@ -558,15 +633,16 @@ async function toggleStore() {
         if (data.success) {
             storeIsOpen = newVal;
             renderStoreToggle();
-            showAdminMsg(newVal ? 'Toko dibuka ✅' : 'Toko ditutup 🔴');
+            showToast(newVal ? 'Toko dibuka' : 'Toko ditutup', newVal ? 'success' : 'closed');
         } else {
-            showAdminMsg(data.message || 'Gagal update status', 'error');
+            showToast(data.message || 'Gagal update status', 'error');
         }
     } catch (e) {
-        showAdminMsg('Gagal terhubung ke server', 'error');
+        showToast('Gagal terhubung ke server', 'error');
     } finally {
         btn.disabled = false;
     }
+    }); // end showConfirmModal
 }
 
 async function loadMenuItems() {
@@ -654,7 +730,10 @@ function renderItemList() {
             const itemId    = btn.dataset.itemId;
             const available = btn.dataset.available === 'true';
             const newVal    = !available;
+            const itemName  = btn.closest('.item-row')?.querySelector('.item-row-name')?.textContent || 'Item';
+            const actionLabel = newVal ? `mengaktifkan "${itemName}"` : `menonaktifkan "${itemName}"`;
 
+            showConfirmModal(`Yakin ingin ${actionLabel}?`, async () => {
             // Optimistic: update state lokal & re-render langsung
             if (newVal) {
                 unavailableItems = unavailableItems.filter(id => id !== itemId);
@@ -674,16 +753,18 @@ function renderItemList() {
                 if (data.success) {
                     unavailableItems = data.unavailableItems;
                     renderItemList();
+                    showToast(newVal ? `"${itemName}" diaktifkan` : `"${itemName}" dinonaktifkan`, newVal ? 'success' : 'closed');
                 } else {
                     // Rollback jika gagal
                     if (newVal) { if (!unavailableItems.includes(itemId)) unavailableItems.push(itemId); }
                     else { unavailableItems = unavailableItems.filter(id => id !== itemId); }
                     renderItemList();
-                    showAdminMsg(data.message || 'Gagal update item', 'error');
+                    showToast(data.message || 'Gagal update item', 'error');
                 }
             } catch (e) {
-                showAdminMsg('Gagal terhubung ke server', 'error');
+                showToast('Gagal terhubung ke server', 'error');
             }
+            }); // end showConfirmModal
         });
     });
 
@@ -693,7 +774,9 @@ function renderItemList() {
             const catName  = btn.dataset.category;
             const catAvail = btn.dataset.catAvailable === 'true';
             const newVal   = !catAvail;
+            const actionLabel = newVal ? `mengaktifkan semua item di "${catName}"` : `menonaktifkan semua item di "${catName}"`;
 
+            showConfirmModal(`Yakin ingin ${actionLabel}?`, async () => {
             const catIds = allMenuItems
                 .filter(item => getCategoryName(item) === catName)
                 .map(item => String(item.item_id || item.id || ''));
@@ -717,15 +800,16 @@ function renderItemList() {
                 if (data.success) {
                     unavailableItems = data.unavailableItems;
                     renderItemList();
-                    showAdminMsg(newVal ? `"${catName}" diaktifkan ✅` : `"${catName}" dinonaktifkan 🔴`);
+                    showToast(newVal ? `"${catName}" diaktifkan` : `"${catName}" dinonaktifkan`, newVal ? 'success' : 'closed');
                 } else {
-                    showAdminMsg(data.message || 'Gagal update kategori', 'error');
+                    showToast(data.message || 'Gagal update kategori', 'error');
                     await loadStoreStatus(); renderItemList(); // rollback dari server
                 }
             } catch (e) {
-                showAdminMsg('Gagal terhubung ke server', 'error');
+                showToast('Gagal terhubung ke server', 'error');
                 await loadStoreStatus(); renderItemList();
             }
+            }); // end showConfirmModal
         });
     });
 }
