@@ -1030,3 +1030,34 @@ body {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
 }
+/* ===================================
+   REMOVE HOVER EFFECTS ON TOUCH DEVICES
+   =================================== */
+@media (hover: none) {
+    .btn-primary:hover,
+    .btn-primary:focus {
+        background: #1d3866;
+        box-shadow: none;
+    }
+
+    .btn-secondary:hover,
+    .btn-secondary:focus {
+        background: white;
+        border-color: #ddd;
+        color: #333;
+    }
+
+    .btn:active {
+        transform: none;
+    }
+
+    .tab-btn:hover:not(.active) {
+        color: rgba(255,255,255,0.55);
+        background: transparent;
+    }
+
+    .form-select:hover,
+    .form-input:hover {
+        border-color: #ddd;
+    }
+}
