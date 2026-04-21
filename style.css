@@ -848,3 +848,63 @@ body {
     font-size: 12px;
     margin: 0;
 }
+/* ===================================
+   CATEGORY GROUP (Item Availability)
+   =================================== */
+
+.category-group {
+    margin-bottom: 4px;
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0 10px;
+    gap: 12px;
+    border-bottom: 1px solid #e8e8e8;
+    margin-bottom: 2px;
+}
+
+.category-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.category-header-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.category-header-count {
+    font-size: 11px;
+    color: #aaa;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+}
+
+.category-items {
+    padding-left: 12px;
+    border-left: 2px solid #f0f0f0;
+    margin-left: 2px;
+}
+
+.category-items .item-row {
+    padding: 10px 0;
+}
+
+.category-items .item-row:last-child {
+    border-bottom: none;
+}
+
+/* Mixed state toggle (sebagian item on) */
+.item-toggle-btn.mixed .toggle-track {
+    background: #999;
+}
+
+.item-toggle-btn.mixed .toggle-thumb {
+    transform: translateX(11px);
+}

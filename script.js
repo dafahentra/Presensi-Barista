@@ -583,6 +583,14 @@ async function loadMenuItems() {
     }
 }
 
+// Helper: ambil nama kategori — Moka API: item.category = { id, name, ... }
+function getCategoryName(item) {
+    if (item.category && typeof item.category === 'object') return item.category.name || 'Lainnya';
+    if (item.category && typeof item.category === 'string') return item.category;
+    if (item.category_name && typeof item.category_name === 'string') return item.category_name;
+    return 'Lainnya';
+}
+
 function renderItemList() {
     const container = document.getElementById('itemList');
 
@@ -591,54 +599,132 @@ function renderItemList() {
         return;
     }
 
-    container.innerHTML = allMenuItems.map(item => {
-        const id          = String(item.item_id || item.id || '');
-        const name        = item.item_name || item.name || '';
-        const category    = item.category_name || item.category || '';
-        const isAvailable = !unavailableItems.includes(id);
+    // Kelompokkan per kategori
+    const categories = {};
+    allMenuItems.forEach(item => {
+        const cat = getCategoryName(item);
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(item);
+    });
+
+    container.innerHTML = Object.entries(categories).map(([catName, items]) => {
+        const catIds     = items.map(item => String(item.item_id || item.id || ''));
+        const availCount = catIds.filter(id => !unavailableItems.includes(id)).length;
+        const allAvail   = availCount === catIds.length;
+        const noneAvail  = availCount === 0;
+        const catMixed   = !allAvail && !noneAvail;
+
+        const itemsHtml = items.map(item => {
+            const id          = String(item.item_id || item.id || '');
+            const name        = item.item_name || item.name || '';
+            const isAvailable = !unavailableItems.includes(id);
+            return `
+            <div class="item-row" data-item-id="${id}">
+                <div class="item-row-info">
+                    <div class="item-row-name ${isAvailable ? '' : 'unavailable'}">${name}</div>
+                </div>
+                <button class="item-toggle-btn ${isAvailable ? 'on' : ''}"
+                        data-item-id="${id}"
+                        data-available="${isAvailable}">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </button>
+            </div>`;
+        }).join('');
+
         return `
-        <div class="item-row" data-item-id="${id}">
-            <div class="item-row-info">
-                <div class="item-row-name ${isAvailable ? '' : 'unavailable'}">${name}</div>
-                <div class="item-row-category">${category}</div>
+        <div class="category-group">
+            <div class="category-header">
+                <div class="category-header-info">
+                    <span class="category-header-name">${catName}</span>
+                    <span class="category-header-count">${availCount}/${catIds.length} tersedia</span>
+                </div>
+                <button class="item-toggle-btn category-toggle-btn ${allAvail ? 'on' : ''} ${catMixed ? 'mixed' : ''}"
+                        data-category="${catName}"
+                        data-cat-available="${allAvail}">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </button>
             </div>
-            <button class="item-toggle-btn ${isAvailable ? 'on' : ''}"
-                    data-item-id="${id}"
-                    data-available="${isAvailable}"
-                    title="${isAvailable ? 'Tersedia' : 'Habis'}">
-                <span class="toggle-track">
-                    <span class="toggle-thumb"></span>
-                </span>
-            </button>
+            <div class="category-items">${itemsHtml}</div>
         </div>`;
     }).join('');
 
-    // Attach events
-    container.querySelectorAll('.item-toggle-btn').forEach(btn => {
+    // ── Toggle item individual (optimistic) ───────────────────────────────────
+    container.querySelectorAll('.item-toggle-btn:not(.category-toggle-btn)').forEach(btn => {
         btn.addEventListener('click', async () => {
             const itemId    = btn.dataset.itemId;
             const available = btn.dataset.available === 'true';
             const newVal    = !available;
 
-            btn.disabled = true;
+            // Optimistic: update state lokal & re-render langsung
+            if (newVal) {
+                unavailableItems = unavailableItems.filter(id => id !== itemId);
+            } else {
+                if (!unavailableItems.includes(itemId)) unavailableItems.push(itemId);
+            }
+            renderItemList();
+
+            // Kirim ke server di background
             try {
                 const res  = await fetch(STORE_STATUS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ baristaId: adminBaristaId, pin: adminPin, action: 'toggleItem', itemId: String(itemId), available: newVal }),
+                    body: JSON.stringify({ baristaId: adminBaristaId, pin: adminPin, action: 'toggleItem', itemId, available: newVal }),
                 });
                 const data = await res.json();
-
                 if (data.success) {
                     unavailableItems = data.unavailableItems;
                     renderItemList();
                 } else {
+                    // Rollback jika gagal
+                    if (newVal) { if (!unavailableItems.includes(itemId)) unavailableItems.push(itemId); }
+                    else { unavailableItems = unavailableItems.filter(id => id !== itemId); }
+                    renderItemList();
                     showAdminMsg(data.message || 'Gagal update item', 'error');
-                    btn.disabled = false;
                 }
             } catch (e) {
                 showAdminMsg('Gagal terhubung ke server', 'error');
-                btn.disabled = false;
+            }
+        });
+    });
+
+    // ── Toggle seluruh kategori (optimistic) ──────────────────────────────────
+    container.querySelectorAll('.category-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const catName  = btn.dataset.category;
+            const catAvail = btn.dataset.catAvailable === 'true';
+            const newVal   = !catAvail;
+
+            const catIds = allMenuItems
+                .filter(item => getCategoryName(item) === catName)
+                .map(item => String(item.item_id || item.id || ''));
+
+            // Optimistic update lokal
+            if (newVal) {
+                unavailableItems = unavailableItems.filter(id => !catIds.includes(id));
+            } else {
+                catIds.forEach(id => { if (!unavailableItems.includes(id)) unavailableItems.push(id); });
+            }
+            renderItemList();
+
+            // Kirim 1 request toggleCategory ke server
+            try {
+                const res  = await fetch(STORE_STATUS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ baristaId: adminBaristaId, pin: adminPin, action: 'toggleCategory', itemIds: catIds, available: newVal }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    unavailableItems = data.unavailableItems;
+                    renderItemList();
+                    showAdminMsg(newVal ? `"${catName}" diaktifkan ✅` : `"${catName}" dinonaktifkan 🔴`);
+                } else {
+                    showAdminMsg(data.message || 'Gagal update kategori', 'error');
+                    await loadStoreStatus(); renderItemList(); // rollback dari server
+                }
+            } catch (e) {
+                showAdminMsg('Gagal terhubung ke server', 'error');
+                await loadStoreStatus(); renderItemList();
             }
         });
     });
