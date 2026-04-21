@@ -17,8 +17,7 @@ const CONFIG = {
   PIN_TIMEOUT: 300000     // 5 minutes
 };
 
-// Rate limiting cache (in-memory, per instance)
-const pinAttempts = {};
+// Rate limiting — pakai PropertiesService agar persistent lintas instance
 
 // ================================
 // HANDLER UTAMA
@@ -31,6 +30,9 @@ function doGet(e) {
     if (action === 'getConfig')      return getPublicConfig();
     if (action === 'getBaristaList') return getBaristaListPublic();
     if (action === 'getHistory')     return getAttendanceHistory();
+    if (action === 'syncBarista')    { syncBaristaCache(); return jsonResponse({ success: true, message: 'Sync selesai' }); }
+    if (action === 'verifyPin')      return verifyBaristaPin(e.parameter.baristaId, e.parameter.pin);
+    if (action === 'validatePin')    return validatePinEndpoint(e.parameter.baristaId, e.parameter.pin);
 
     return jsonResponse({ success: false, message: 'Invalid action' });
   } catch (error) {
@@ -89,24 +91,57 @@ function getPublicConfig() {
   });
 }
 
+
+// ================================
+// VERIFY PIN — untuk admin panel
+// Dipanggil dari store-status Netlify Function
+// Hanya return success/fail, tidak expose PIN
+// ================================
+
+function verifyBaristaPin(baristaId, pin) {
+  if (!baristaId || !pin) {
+    return jsonResponse({ success: false, message: 'Data tidak lengkap' });
+  }
+
+  const rateLimitCheck = checkRateLimit(baristaId);
+  if (!rateLimitCheck.success) return jsonResponse(rateLimitCheck);
+
+  const barista = getBaristaData(baristaId);
+  if (!barista) {
+    recordFailedAttempt(baristaId);
+    return jsonResponse({ success: false, message: 'Barista tidak ditemukan' });
+  }
+
+  if (barista.status !== 'Aktif') {
+    return jsonResponse({ success: false, message: 'Akun tidak aktif' });
+  }
+
+  const pinInput  = pin.toString().replace(/[^0-9]/g, '');
+  const pinStored = barista.pin.toString().replace(/[^0-9]/g, '');
+
+  if (pinInput !== pinStored) {
+    recordFailedAttempt(baristaId);
+    return jsonResponse({ success: false, message: 'PIN salah' });
+  }
+
+  resetAttempts(baristaId);
+  return jsonResponse({ success: true, name: barista.name });
+}
+
 // ================================
 // BARISTA LIST
 // ================================
 
 // Helper internal — dipakai getPublicConfig & getBaristaListPublic
+// Baca dari cache PropertiesService agar konsisten dengan getBaristaData
 function getBaristaListData() {
-  const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEET_BARISTA);
-  if (!sheet) return {};
-
-  const data = sheet.getDataRange().getValues();
+  const db   = loadBaristaCache();
   const list = {};
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][4] === 'Aktif') {
-      list[data[i][0]] = { name: data[i][1] }; // NO PIN — hanya ID & nama
+  for (const id in db) {
+    if (db[id].status === 'Aktif') {
+      list[id] = { name: db[id].name }; // NO PIN — hanya ID & nama
     }
   }
-
   return list;
 }
 
@@ -139,7 +174,13 @@ function validateAttendance(data) {
     return { success: false, message: 'Akun barista tidak aktif' };
   }
 
-  if (baristaData.pin !== pin) {
+  // Strip non-digit dari kedua sisi agar aman dari formatting issue
+  const pinInput  = pin.toString().replace(/[^0-9]/g, '');
+  const pinStored = baristaData.pin.toString().replace(/[^0-9]/g, '');
+
+  Logger.log('[validateAttendance] pinInput=[' + pinInput + '] pinStored=[' + pinStored + ']');
+
+  if (pinStored !== pinInput) {
     recordFailedAttempt(baristaId);
     return { success: false, message: 'PIN salah!' };
   }
@@ -210,62 +251,154 @@ function findLastEntryToday(sheet, baristaId) {
 }
 
 // ================================
-// RATE LIMITING
+// RATE LIMITING — PropertiesService (persistent)
 // ================================
 
-function checkRateLimit(baristaId) {
-  const now = Date.now();
-  const attempts = pinAttempts[baristaId];
-  if (!attempts) return { success: true };
+function _rlKey(baristaId) {
+  return 'rl_' + baristaId.toString();
+}
 
-  if (now - attempts.firstAttempt > CONFIG.PIN_TIMEOUT) {
-    delete pinAttempts[baristaId];
+function checkRateLimit(baristaId) {
+  const props = PropertiesService.getScriptProperties();
+  const raw   = props.getProperty(_rlKey(baristaId));
+  if (!raw) return { success: true };
+
+  const attempts = JSON.parse(raw);
+  const now      = Math.floor(Date.now() / 1000); // detik
+
+  if (now - attempts.firstAttempt > Math.floor(CONFIG.PIN_TIMEOUT / 1000)) {
+    props.deleteProperty(_rlKey(baristaId));
     return { success: true };
   }
 
   if (attempts.count >= CONFIG.MAX_PIN_ATTEMPTS) {
-    const remaining = Math.ceil((CONFIG.PIN_TIMEOUT - (now - attempts.firstAttempt)) / 60000);
-    return { success: false, message: `Terlalu banyak percobaan gagal. Coba lagi dalam ${remaining} menit` };
+    const remaining = Math.ceil(((CONFIG.PIN_TIMEOUT / 1000) - (now - attempts.firstAttempt)) / 60);
+    return {
+      success: false,
+      message: `Terlalu banyak percobaan gagal. Coba lagi dalam ${remaining} menit`
+    };
   }
 
   return { success: true };
 }
 
 function recordFailedAttempt(baristaId) {
-  const now = Date.now();
-  if (!pinAttempts[baristaId]) {
-    pinAttempts[baristaId] = { count: 1, firstAttempt: now };
+  const props = PropertiesService.getScriptProperties();
+  const key   = _rlKey(baristaId);
+  const raw   = props.getProperty(key);
+  const now   = Math.floor(Date.now() / 1000);
+
+  if (!raw) {
+    props.setProperty(key, JSON.stringify({ count: 1, firstAttempt: now }));
   } else {
-    pinAttempts[baristaId].count++;
+    const attempts = JSON.parse(raw);
+    attempts.count++;
+    props.setProperty(key, JSON.stringify(attempts));
   }
 }
 
 function resetAttempts(baristaId) {
-  delete pinAttempts[baristaId];
+  PropertiesService.getScriptProperties().deleteProperty(_rlKey(baristaId));
 }
 
 // ================================
-// DATABASE
+// DATABASE — PropertiesService Cache
 // ================================
+
+const BARISTA_CACHE_KEY = 'barista_db_v1';
+
+// Baca semua barista dari cache. Jika kosong, sync dari Sheets.
+function loadBaristaCache() {
+  const raw = PropertiesService.getScriptProperties().getProperty(BARISTA_CACHE_KEY);
+  if (raw) {
+    try { return JSON.parse(raw); } catch (e) { /* corrupt — re-sync */ }
+  }
+  return syncBaristaCache();
+}
+
+// Sync dari Sheets ke PropertiesService
+function syncBaristaCache() {
+  const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEET_BARISTA);
+  if (!sheet) { Logger.log('[sync] Sheet tidak ditemukan'); return {}; }
+
+  const rows = sheet.getDataRange().getValues();
+  const db   = {};
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+
+    const id  = r[0].toString().trim();
+    // Strip karakter non-digit agar aman dari locale formatting (misal: "2.809" → "2809")
+    const pin = (r[2] !== undefined && r[2] !== null && r[2] !== '')
+                  ? r[2].toString().replace(/[^0-9]/g, '')
+                  : '';
+
+    db[id] = {
+      name:   (r[1] || '').toString().trim(),
+      pin:    pin,
+      email:  (r[3] || '').toString().trim(),
+      status: (r[4] || '').toString().trim(),
+    };
+
+    Logger.log('[sync] id=' + id + ' name=' + db[id].name + ' pinLen=' + pin.length + ' status=' + db[id].status);
+  }
+
+  PropertiesService.getScriptProperties().setProperty(BARISTA_CACHE_KEY, JSON.stringify(db));
+  Logger.log('[sync] Selesai — ' + Object.keys(db).length + ' barista');
+  return db;
+}
+
+// Trigger otomatis: jalankan setiap kali sheet Database Barista diedit
+function onEdit(e) {
+  if (e && e.range && e.range.getSheet().getName() === CONFIG.SHEET_BARISTA) {
+    Logger.log('[onEdit] Perubahan di Database Barista — sync cache...');
+    syncBaristaCache();
+  }
+}
 
 // Private: untuk validasi PIN (server only, tidak dikirim ke frontend)
 function getBaristaData(baristaId) {
-  const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEET_BARISTA);
-  if (!sheet) return null;
-
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0].toString() === baristaId.toString()) {
-      return {
-        id:     data[i][0],
-        name:   data[i][1],
-        pin:    data[i][2].toString(),
-        email:  data[i][3],
-        status: data[i][4]
-      };
-    }
+  const db  = loadBaristaCache();
+  const key = baristaId.toString().trim();
+  const b   = db[key];
+  if (!b) {
+    Logger.log('[getBaristaData] id=' + key + ' tidak ditemukan di cache');
+    return null;
   }
-  return null;
+  Logger.log('[getBaristaData] id=' + key + ' name=' + b.name + ' pinLen=' + b.pin.length);
+  return { id: key, name: b.name, pin: b.pin, email: b.email, status: b.status };
+}
+
+// Validasi PIN saja — untuk admin panel (tidak perlu check lokasi/check-in)
+function validatePinEndpoint(baristaId, pin) {
+  if (!baristaId || !pin) {
+    return jsonResponse({ success: false, message: 'Data tidak lengkap' });
+  }
+
+  const rateLimitCheck = checkRateLimit(baristaId);
+  if (!rateLimitCheck.success) return jsonResponse(rateLimitCheck);
+
+  const barista = getBaristaData(baristaId);
+  if (!barista) {
+    recordFailedAttempt(baristaId);
+    return jsonResponse({ success: false, message: 'Barista tidak ditemukan' });
+  }
+
+  if (barista.status !== 'Aktif') {
+    return jsonResponse({ success: false, message: 'Akun tidak aktif' });
+  }
+
+  const pinInput  = pin.toString().replace(/[^0-9]/g, '');
+  const pinStored = barista.pin.toString().replace(/[^0-9]/g, '');
+
+  if (pinInput !== pinStored) {
+    recordFailedAttempt(baristaId);
+    return jsonResponse({ success: false, message: 'PIN salah' });
+  }
+
+  resetAttempts(baristaId);
+  return jsonResponse({ success: true, message: 'OK', name: barista.name });
 }
 
 // ================================
@@ -329,7 +462,6 @@ function saveAttendance(data) {
     sendEmailNotification(data.email, data.baristaName, 'Check Out', timestamp);
   }
 
-  sheet.autoResizeColumns(1, 12);
   return { timestamp: timestamp.toISOString(), name: data.baristaName, type: data.type };
 }
 
@@ -359,9 +491,10 @@ function getAttendanceHistory() {
     if (data.length <= 1) return jsonResponse({ success: true, data: [] });
 
     const todayStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
-    const history = [];
+    const history  = [];
+    const LIMIT    = 100; // cegah timeout di sheet besar
 
-    for (let i = data.length - 1; i >= 1; i--) {
+    for (let i = data.length - 1; i >= 1 && history.length < LIMIT; i--) {
       const row = data[i];
       if (!row[4] || !row[5]) continue;
 
