@@ -67,6 +67,9 @@ async function init() {
     // Auto-refresh: barista list dan history (sinkron perubahan dari sheet)
     setInterval(refreshBaristaList, CONFIG.BARISTA_REFRESH_INTERVAL);
     setInterval(loadTodayHistory, CONFIG.HISTORY_REFRESH_INTERVAL);
+
+    // Admin panel
+    initAdmin();
 }
 
 // ================================
@@ -111,20 +114,32 @@ async function refreshBaristaList() {
 }
 
 function populateBaristaSelect(baristaList) {
+    // Populate presensi dropdown
     const select = elements.baristaName;
-    const selectedValue = select.value; // simpan pilihan saat ini
+    const selectedValue = select.value;
 
     select.innerHTML = '<option value="">-- Pilih Barista --</option>';
-
     Object.entries(baristaList).forEach(([id, barista]) => {
         const option = document.createElement('option');
         option.value = id;
         option.textContent = barista.name;
         select.appendChild(option);
     });
-
-    // Kembalikan pilihan sebelumnya jika masih ada
     if (selectedValue) select.value = selectedValue;
+
+    // Populate admin dropdown juga (pakai list yang sama)
+    const adminSelect = document.getElementById('adminBaristaSelect');
+    if (adminSelect) {
+        const adminSelected = adminSelect.value;
+        adminSelect.innerHTML = '<option value="">-- Pilih Barista --</option>';
+        Object.entries(baristaList).forEach(([id, barista]) => {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = barista.name;
+            adminSelect.appendChild(option);
+        });
+        if (adminSelected) adminSelect.value = adminSelected;
+    }
 }
 
 // ================================
@@ -409,4 +424,222 @@ function showMessage(type, text) {
     elements.message.className = `message ${type} show`;
     elements.message.textContent = text;
     setTimeout(() => elements.message.classList.remove('show'), 5000);
+}
+
+// ================================
+// ADMIN PANEL
+// ================================
+
+const STORE_STATUS_URL = 'https://sectorseven.space/.netlify/functions/store-status';
+const MOKA_ITEMS_URL   = 'https://sectorseven.space/.netlify/functions/moka-items';
+
+let adminPin         = null;
+let adminBaristaId   = null;
+let storeIsOpen      = true;
+let unavailableItems = [];
+let allMenuItems     = [];
+
+function initAdmin() {
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + tab).classList.add('active');
+        });
+    });
+
+    // PIN gate — pakai barista ID + PIN yang sama dengan presensi
+    const selectEl = document.getElementById('adminBaristaSelect');
+    const pinInput  = document.getElementById('adminPin');
+    const pinBtn    = document.getElementById('adminPinBtn');
+
+    async function tryAdminLogin() {
+        const baristaId = selectEl.value;
+        const pin       = pinInput.value.trim();
+
+        if (!baristaId) { showAdminPinMsg('Pilih nama barista'); return; }
+        if (pin.length < 4) { showAdminPinMsg('PIN harus 4 digit'); return; }
+
+        pinBtn.disabled = true;
+        pinBtn.textContent = 'Memeriksa...';
+
+        try {
+            // Validasi ke Apps Script — endpoint validatePin
+            const res  = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=validatePin&baristaId=${encodeURIComponent(baristaId)}&pin=${encodeURIComponent(pin)}`);
+            const data = await res.json();
+
+            if (data.success) {
+                adminPin = pin;
+                adminBaristaId = baristaId;
+                document.getElementById('adminPinGate').style.display = 'none';
+                document.getElementById('adminControls').style.display = 'block';
+                await loadAdminData();
+            } else {
+                showAdminPinMsg(data.message || 'PIN salah');
+                pinInput.value = '';
+            }
+        } catch (e) {
+            showAdminPinMsg('Gagal terhubung ke server');
+        } finally {
+            pinBtn.disabled = false;
+            pinBtn.textContent = 'Masuk';
+        }
+    }
+
+    pinBtn.addEventListener('click', tryAdminLogin);
+    pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryAdminLogin(); });
+    pinInput.addEventListener('input', e => { e.target.value = e.target.value.replace(/[^0-9]/g, ''); });
+
+    // Store toggle
+    document.getElementById('storeToggleBtn').addEventListener('click', toggleStore);
+}
+
+function showAdminPinMsg(text) {
+    const el = document.getElementById('adminPinMsg');
+    el.className = 'message error show';
+    el.textContent = text;
+    setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function showAdminMsg(text, type = 'success') {
+    const el = document.getElementById('adminMsg');
+    el.className = `message ${type} show`;
+    el.textContent = text;
+    setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+async function loadAdminData() {
+    await Promise.all([loadStoreStatus(), loadMenuItems()]);
+}
+
+async function loadStoreStatus() {
+    try {
+        const res  = await fetch(STORE_STATUS_URL);
+        const data = await res.json();
+        storeIsOpen      = data.isOpen !== false;
+        unavailableItems = data.unavailableItems || [];
+        renderStoreToggle();
+    } catch (e) {
+        console.error('[admin] Gagal load store status:', e);
+    }
+}
+
+function renderStoreToggle() {
+    const btn   = document.getElementById('storeToggleBtn');
+    const label = document.getElementById('storeStatusLabel');
+
+    if (storeIsOpen) {
+        btn.classList.add('on');
+        label.textContent = '🟢 Buka';
+        label.className   = 'store-status-label open';
+    } else {
+        btn.classList.remove('on');
+        label.textContent = '🔴 Tutup';
+        label.className   = 'store-status-label closed';
+    }
+}
+
+async function toggleStore() {
+    const btn    = document.getElementById('storeToggleBtn');
+    btn.disabled = true;
+    const newVal = !storeIsOpen;
+
+    try {
+        const res  = await fetch(STORE_STATUS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ baristaId: adminBaristaId, pin: adminPin, action: 'setOpen', isOpen: newVal }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            storeIsOpen = newVal;
+            renderStoreToggle();
+            showAdminMsg(newVal ? 'Toko dibuka ✅' : 'Toko ditutup 🔴');
+        } else {
+            showAdminMsg(data.message || 'Gagal update status', 'error');
+        }
+    } catch (e) {
+        showAdminMsg('Gagal terhubung ke server', 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function loadMenuItems() {
+    const container = document.getElementById('itemList');
+    container.innerHTML = '<p class="no-data">Memuat menu...</p>';
+
+    try {
+        const res  = await fetch(MOKA_ITEMS_URL);
+        const data = await res.json();
+        allMenuItems = data.items || [];
+        renderItemList();
+    } catch (e) {
+        container.innerHTML = '<p class="no-data">Gagal memuat menu</p>';
+    }
+}
+
+function renderItemList() {
+    const container = document.getElementById('itemList');
+
+    if (!allMenuItems.length) {
+        container.innerHTML = '<p class="no-data">Tidak ada item</p>';
+        return;
+    }
+
+    container.innerHTML = allMenuItems.map(item => {
+        const id          = String(item.item_id || item.id || '');
+        const name        = item.item_name || item.name || '';
+        const category    = item.category_name || item.category || '';
+        const isAvailable = !unavailableItems.includes(id);
+        return `
+        <div class="item-row" data-item-id="${id}">
+            <div class="item-row-info">
+                <div class="item-row-name ${isAvailable ? '' : 'unavailable'}">${name}</div>
+                <div class="item-row-category">${category}</div>
+            </div>
+            <button class="item-toggle-btn ${isAvailable ? 'on' : ''}"
+                    data-item-id="${id}"
+                    data-available="${isAvailable}"
+                    title="${isAvailable ? 'Tersedia' : 'Habis'}">
+                <span class="toggle-track">
+                    <span class="toggle-thumb"></span>
+                </span>
+            </button>
+        </div>`;
+    }).join('');
+
+    // Attach events
+    container.querySelectorAll('.item-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const itemId    = btn.dataset.itemId;
+            const available = btn.dataset.available === 'true';
+            const newVal    = !available;
+
+            btn.disabled = true;
+            try {
+                const res  = await fetch(STORE_STATUS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ baristaId: adminBaristaId, pin: adminPin, action: 'toggleItem', itemId: String(itemId), available: newVal }),
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    unavailableItems = data.unavailableItems;
+                    renderItemList();
+                } else {
+                    showAdminMsg(data.message || 'Gagal update item', 'error');
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                showAdminMsg('Gagal terhubung ke server', 'error');
+                btn.disabled = false;
+            }
+        });
+    });
 }

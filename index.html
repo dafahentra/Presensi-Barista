@@ -16,9 +16,20 @@
         </div>
     </header>
 
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <div class="container">
+            <button class="tab-btn active" data-tab="presensi">Presensi</button>
+            <button class="tab-btn" data-tab="admin">Admin</button>
+        </div>
+    </nav>
+
     <!-- Main Content -->
     <main class="main">
         <div class="container">
+            <!-- Tab: Presensi -->
+            <div class="tab-panel active" id="tab-presensi">
+
             <!-- Map Container -->
             <div class="map-card">
                 <h3 class="map-title">Lokasi Saat Ini</h3>
@@ -74,6 +85,68 @@
                     <p class="no-data">Memuat data...</p>
                 </div>
             </div>
+            </div> <!-- end tab-presensi -->
+
+            <!-- Tab: Admin -->
+            <div class="tab-panel" id="tab-admin">
+
+                <!-- PIN Gate -->
+                <div class="card" id="adminPinGate">
+                    <h2 class="card-title">Admin Panel</h2>
+                    <p class="admin-hint">Login dengan akun barista kamu</p>
+                    <div class="form-group">
+                        <label for="adminBaristaSelect">Nama</label>
+                        <select id="adminBaristaSelect" class="form-select">
+                            <option value="">-- Pilih Barista --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminPin">PIN (4 Digit)</label>
+                        <input type="password" id="adminPin" class="form-input" maxlength="4" placeholder="****" inputmode="numeric">
+                    </div>
+                    <button id="adminPinBtn" class="btn btn-primary" style="width:100%">Masuk</button>
+                    <div id="adminPinMsg" class="message"></div>
+                </div>
+
+                <!-- Admin Controls (hidden until PIN verified) -->
+                <div id="adminControls" style="display:none">
+
+                    <!-- Header admin -->
+                    <div class="admin-header">
+                        <span class="admin-user-label">👤 <span id="adminUserLabel"></span></span>
+                        <button id="adminLogoutBtn" class="btn btn-secondary admin-logout-btn">Keluar</button>
+                    </div>
+
+                    <!-- Store Status -->
+                    <div class="card">
+                        <h2 class="card-title">Status Toko</h2>
+                        <div class="store-status-row">
+                            <div class="store-status-info">
+                                <span class="store-status-label" id="storeStatusLabel">Memuat...</span>
+                                <span class="store-status-sub">Pelanggan dapat melakukan order</span>
+                            </div>
+                            <button class="toggle-btn" id="storeToggleBtn" data-open="true">
+                                <span class="toggle-track">
+                                    <span class="toggle-thumb"></span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Item Availability -->
+                    <div class="card">
+                        <h2 class="card-title">Ketersediaan Menu</h2>
+                        <p class="admin-hint">Matikan item yang sedang habis</p>
+                        <div id="itemList" class="item-list">
+                            <p class="no-data">Memuat menu...</p>
+                        </div>
+                    </div>
+
+                    <div id="adminMsg" class="message"></div>
+                </div>
+
+            </div> <!-- end tab-admin -->
+
         </div>
     </main>
 

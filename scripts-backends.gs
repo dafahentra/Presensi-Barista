@@ -5,12 +5,12 @@ const CONFIG = {
   SPREADSHEET_ID: '1mkF5sZEUlzicIE2_32ZVppAYQ-gjSDgOWZX8wYIxx6E',
   SHEET_BARISTA: 'Database Barista',
   SHEET_PRESENSI: 'Presensi Barista',
-  EMAIL_SENDER: 'sectorsevenyk@gmail.com',   // ✅ Pengirim email
+  EMAIL_SENDER: 'sectorsevenyk@gmail.com',
   EMAIL_ADMIN: ['dafahentra@gmail.com'],
   NAMA_PERUSAHAAN: 'SECTOR SEVEN',
   CAFE_LOCATION: {
-    lat: -7.571176486584326,
-    lng: 110.87119846027448
+    lat: -7.7700682431027985,
+    lng: 110.37967552722661
   },
   MAX_DISTANCE: 75,       // meters
   MAX_PIN_ATTEMPTS: 5,
@@ -46,11 +46,9 @@ function doPost(e) {
       return jsonResponse({ success: false, message: 'Invalid action' });
     }
 
-    // Validasi (PIN, lokasi, rate limit)
     const validation = validateAttendance(data);
     if (!validation.success) return jsonResponse(validation);
 
-    // Validasi double check-in / check-out tanpa check-in
     const stateCheck = validateAttendanceState(data.baristaId, data.type);
     if (!stateCheck.success) return jsonResponse(stateCheck);
 
@@ -76,6 +74,48 @@ function doPost(e) {
 }
 
 // ================================
+// CONFIG (Single Source of Truth)
+// Sekaligus kirim barista list → frontend cukup 1 request saat init
+// ================================
+
+function getPublicConfig() {
+  return jsonResponse({
+    success: true,
+    data: {
+      cafeLocation: CONFIG.CAFE_LOCATION,
+      maxDistance:  CONFIG.MAX_DISTANCE,
+      baristaList:  getBaristaListData()  // ✅ Gabung dalam 1 response
+    }
+  });
+}
+
+// ================================
+// BARISTA LIST
+// ================================
+
+// Helper internal — dipakai getPublicConfig & getBaristaListPublic
+function getBaristaListData() {
+  const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEET_BARISTA);
+  if (!sheet) return {};
+
+  const data = sheet.getDataRange().getValues();
+  const list = {};
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][4] === 'Aktif') {
+      list[data[i][0]] = { name: data[i][1] }; // NO PIN — hanya ID & nama
+    }
+  }
+
+  return list;
+}
+
+// Endpoint publik untuk auto-refresh barista list dari sheet
+function getBaristaListPublic() {
+  return jsonResponse({ success: true, data: getBaristaListData() });
+}
+
+// ================================
 // VALIDASI
 // ================================
 
@@ -86,11 +126,9 @@ function validateAttendance(data) {
     return { success: false, message: 'Data tidak lengkap' };
   }
 
-  // Rate limiting
   const rateLimitCheck = checkRateLimit(baristaId);
   if (!rateLimitCheck.success) return rateLimitCheck;
 
-  // Validasi PIN dari sheet
   const baristaData = getBaristaData(baristaId);
   if (!baristaData) {
     recordFailedAttempt(baristaId);
@@ -106,7 +144,6 @@ function validateAttendance(data) {
     return { success: false, message: 'PIN salah!' };
   }
 
-  // Validasi lokasi
   const distance = calculateDistance(latitude, longitude, CONFIG.CAFE_LOCATION.lat, CONFIG.CAFE_LOCATION.lng);
   if (distance > CONFIG.MAX_DISTANCE) {
     return {
@@ -125,23 +162,21 @@ function validateAttendance(data) {
   };
 }
 
-// ✅ Cegah double check-in dan check-out tanpa check-in
+// Cegah double check-in dan check-out tanpa check-in
 function validateAttendanceState(baristaId, type) {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const sheet = ss.getSheetByName(CONFIG.SHEET_PRESENSI);
-  if (!sheet) return { success: true }; // sheet belum ada = boleh check-in
+  if (!sheet) return { success: true };
 
   const lastEntry = findLastEntryToday(sheet, baristaId);
 
   if (type === 'in') {
-    // Sudah check-in hari ini dan belum check-out
     if (lastEntry && lastEntry.type === 'Check In' && lastEntry.status !== 'Complete') {
       return { success: false, message: 'Anda sudah Check In. Silakan Check Out terlebih dahulu.' };
     }
   }
 
   if (type === 'out') {
-    // Belum ada check-in hari ini
     if (!lastEntry || lastEntry.type === 'Check Out' || lastEntry.status === 'Complete') {
       return { success: false, message: 'Anda belum Check In hari ini.' };
     }
@@ -150,7 +185,6 @@ function validateAttendanceState(baristaId, type) {
   return { success: true };
 }
 
-// Cari entri terakhir barista HARI INI
 function findLastEntryToday(sheet, baristaId) {
   const data = sheet.getDataRange().getValues();
   const todayStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
@@ -159,7 +193,6 @@ function findLastEntryToday(sheet, baristaId) {
     const row = data[i];
     if (row[3].toString() !== baristaId.toString()) continue;
 
-    // Periksa tanggal
     const rowDate = row[1] instanceof Date
       ? Utilities.formatDate(row[1], 'Asia/Jakarta', 'yyyy-MM-dd')
       : (row[0] instanceof Date ? Utilities.formatDate(row[0], 'Asia/Jakarta', 'yyyy-MM-dd') : null);
@@ -168,8 +201,8 @@ function findLastEntryToday(sheet, baristaId) {
 
     return {
       row: i + 1,
-      type: row[5],       // "Check In" / "Check Out"
-      status: row[11]     // "" / "Check-In" / "Complete"
+      type: row[5],
+      status: row[11]
     };
   }
 
@@ -215,7 +248,7 @@ function resetAttempts(baristaId) {
 // DATABASE
 // ================================
 
-// ✅ Private: untuk validasi PIN (server only, tidak dikirim ke frontend)
+// Private: untuk validasi PIN (server only, tidak dikirim ke frontend)
 function getBaristaData(baristaId) {
   const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEET_BARISTA);
   if (!sheet) return null;
@@ -233,34 +266,6 @@ function getBaristaData(baristaId) {
     }
   }
   return null;
-}
-
-// ✅ Public: kirim konfigurasi lokasi ke frontend (single source of truth)
-function getPublicConfig() {
-  return jsonResponse({
-    success: true,
-    data: {
-      cafeLocation: CONFIG.CAFE_LOCATION,
-      maxDistance: CONFIG.MAX_DISTANCE
-    }
-  });
-}
-
-// ✅ Public: hanya ID & nama, hanya Aktif (NO PIN)
-function getBaristaListPublic() {
-  const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEET_BARISTA);
-  if (!sheet) return jsonResponse({ success: false, message: 'Database barista tidak ditemukan' });
-
-  const data = sheet.getDataRange().getValues();
-  const baristaList = {};
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][4] === 'Aktif') {                     // ✅ Filter Nonaktif
-      baristaList[data[i][0]] = { name: data[i][1] }; // ✅ NO PIN
-    }
-  }
-
-  return jsonResponse({ success: true, data: baristaList });
 }
 
 // ================================
@@ -294,14 +299,12 @@ function saveAttendance(data) {
       timestamp, '', '', 'Check-In'
     ]);
     sheet.getRange(sheet.getLastRow(), 12).setBackground('#f0f0f0').setFontWeight('bold');
-
     sendEmailNotification(data.email, data.baristaName, 'Check In', timestamp);
 
   } else if (data.type === 'out') {
     const checkInData = findLastCheckIn(sheet, data.baristaId);
 
     if (!checkInData) {
-      // Seharusnya tidak sampai sini karena sudah dicegah di validateAttendanceState
       sheet.appendRow([
         timestamp, tanggalDate, waktu,
         data.baristaId, data.baristaName, tipeText,
@@ -318,7 +321,6 @@ function saveAttendance(data) {
         checkInData.timestamp, timestamp, durasiJam, 'Check-Out'
       ]);
 
-      // Update baris check-in
       sheet.getRange(checkInData.row, 10).setValue(timestamp);
       sheet.getRange(checkInData.row, 11).setValue(durasiJam);
       sheet.getRange(checkInData.row, 12).setValue('Complete').setBackground('#d1fae5').setFontWeight('bold');
@@ -328,11 +330,9 @@ function saveAttendance(data) {
   }
 
   sheet.autoResizeColumns(1, 12);
-
   return { timestamp: timestamp.toISOString(), name: data.baristaName, type: data.type };
 }
 
-// Cari check-in terakhir yang belum complete (untuk check-out)
 function findLastCheckIn(sheet, baristaId) {
   const data = sheet.getDataRange().getValues();
   for (let i = data.length - 1; i >= 1; i--) {
@@ -365,10 +365,8 @@ function getAttendanceHistory() {
       const row = data[i];
       if (!row[4] || !row[5]) continue;
 
-      // Cek tanggal
       const dateObj = row[1] instanceof Date ? row[1] : (row[0] instanceof Date ? row[0] : null);
       if (!dateObj) continue;
-
       if (Utilities.formatDate(dateObj, 'Asia/Jakarta', 'yyyy-MM-dd') !== todayStr) continue;
 
       history.push({
@@ -404,10 +402,8 @@ Waktu: ${waktuStr}
 Terima kasih,
 ${CONFIG.NAMA_PERUSAHAAN}`;
 
-    // ✅ Kirim dari sectorsevenyk@gmail.com (harus alias terverifikasi di Gmail)
     GmailApp.sendEmail(toEmail, subject, body, { from: CONFIG.EMAIL_SENDER });
 
-    // Notifikasi admin
     CONFIG.EMAIL_ADMIN.forEach(adminEmail => {
       GmailApp.sendEmail(adminEmail, `[Admin] ${subject}`, body, { from: CONFIG.EMAIL_SENDER });
     });
