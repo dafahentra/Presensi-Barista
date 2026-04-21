@@ -474,6 +474,11 @@ function initAdmin() {
             if (data.success) {
                 adminPin = pin;
                 adminBaristaId = baristaId;
+
+                // Tampilkan nama barista yang login
+                const baristaName = selectEl.options[selectEl.selectedIndex]?.text || baristaId;
+                document.getElementById('adminUserLabel').textContent = baristaName;
+
                 document.getElementById('adminPinGate').style.display = 'none';
                 document.getElementById('adminControls').style.display = 'block';
                 await loadAdminData();
@@ -495,6 +500,20 @@ function initAdmin() {
 
     // Store toggle
     document.getElementById('storeToggleBtn').addEventListener('click', toggleStore);
+
+    // Logout
+    document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+        adminPin = null;
+        adminBaristaId = null;
+        storeIsOpen = true;
+        unavailableItems = [];
+        allMenuItems = [];
+        document.getElementById('adminControls').style.display = 'none';
+        document.getElementById('adminPinGate').style.display = 'block';
+        document.getElementById('adminBaristaSelect').value = '';
+        document.getElementById('adminPin').value = '';
+        document.getElementById('adminUserLabel').textContent = '';
+    });
 }
 
 function showAdminPinMsg(text) {
